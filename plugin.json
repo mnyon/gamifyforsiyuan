@@ -1,0 +1,18 @@
+{
+  "name": "gamify-for-siyuan",
+  "author": "",
+  "url": "",
+  "version": "0.1.0",
+  "icon": "icon.png",
+  "minAppVersion": "3.8.5",
+  "backends": ["all"],
+  "frontends": ["desktop", "mobile", "browser-desktop", "browser-mobile", "desktop-window"],
+  "disabledInPublish": true,
+  "displayName": { "default": "Gamify for SiYuan", "zh-CN": "Gamify for SiYuan" },
+  "description": {
+    "default": "Turn completed SiYuan TODOs into small Habitica rewards, with a quiet character companion.",
+    "zh-CN": "让思源 TODO 的完成变成 Habitica 的小小奖励，以角色、星光与音效陪伴每一步。"
+  },
+  "readme": { "default": "README.md", "zh-CN": "README.zh-CN.md" },
+  "keywords": ["gamification", "time spent", "productivity"]
+}
