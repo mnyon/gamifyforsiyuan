@@ -53,11 +53,18 @@ export class GamifyView {
   update({ state, user, message = '', status = 'offline', backlog = 0 }) {
     const text = (selector, value) => { this.root.querySelector(selector).textContent = value; };
     const progress = state.credits.length, target = state.target;
+    const pending = Object.keys(state.pending).length;
     text('.progress', progress); text('.target', target ?? '—');
     this.root.querySelector('.reward span').style.width = `${target ? Math.min(100, progress / target * 100) : 0}%`;
+    let preview = this.root.querySelector('.reward .pending-progress');
+    if (!preview) { preview = document.createElement('i'); preview.className = 'pending-progress'; this.root.querySelector('.reward').append(preview); }
+    preview.style.left = `${target ? Math.min(100, progress / target * 100) : 0}%`;
+    preview.style.width = `${target ? Math.min(pending, Math.max(0, target - progress)) / target * 100 : 0}%`;
+    let pendingCount = this.root.querySelector('.pending-count');
+    if (!pendingCount) { pendingCount = document.createElement('small'); pendingCount.className = 'pending-count'; this.root.querySelector('.fraction').append(pendingCount); }
+    pendingCount.textContent = pending ? ` +${pending}` : '';
     const waiting = state.rewards.filter(r => r.status !== 'sent').length;
     text('.remaining', waiting ? `${waiting} 次奖励待领取 · 继续积累下一轮` : target ? `再完成 ${Math.max(0, target - progress)} 个 TODO，迎接下一次奖励` : '正在读取你的 TODO……');
-    const pending = Object.keys(state.pending).length;
     text('.pending', pending ? `${pending} 项待计入 · 保持勾选 60 秒` : `未完成 ${backlog.toLocaleString()} 项 · 本轮目标固定，进度跨天保留`);
     text('.notice', message);
     text('.connection-label', { online: 'Habitica 已连接', offline: '尚未连接 Habitica', waiting: '奖励待领取', paused: '当前窗口仅展示', checking: '正在连接 Habitica' }[status] || status);
@@ -125,6 +132,7 @@ export class GamifyView {
     // These overlays never become children of the editor or change note content.
     const effect = document.createElement('div'); effect.className = 'line-complete';
     effect.innerHTML = '<span class="line-sweep"></span><span class="success-mark"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="13"/><path d="m10 16 4 4 8-9"/></svg></span><span class="line-label">完成了一件事</span>';
+    if (context.target) effect.querySelector('.line-label').textContent = `完成了一件事 · ${context.progress}/${context.target}`;
     field.append(effect);
     const entry = { effect, element, blockId: context.blockId };
     this.effects.add(entry);

@@ -50,18 +50,37 @@ module.exports = class GamifyForSiYuan extends Plugin {
     if (this.disposed) return;
     this.engine = new TodoProgress(state || newProgress());
     this.observedClicks = new Map();
+    this.localTasks = new Map();
     this.click = event => {
       if (!event.isTrusted) return;
       const action = event.target.closest?.('.protyle-action--task');
       const block = action?.closest('[data-node-id][data-subtype="t"]');
       if (!block) return;
-      const context = { point: { x: event.clientX, y: event.clientY }, at: Date.now(), element: block, blockId: block.dataset.nodeId, wasDone: this.engine.previous?.get(block.dataset.nodeId) };
+      const context = { point: { x: event.clientX, y: event.clientY }, at: Date.now(), element: block, blockId: block.dataset.nodeId };
       this.observedClicks.set(block.dataset.nodeId, context);
-      // Read this one block first so visual feedback need not wait for the workspace scan.
-      this.view.later(() => this.feedbackForClick(context), 100);
       this.view.unlockSound(); this.scheduleScan(180);
     };
     document.addEventListener('click', this.click, true);
+    this.taskObserver = new MutationObserver(records => {
+      if (this.disposed || this.storageFailed) return;
+      const changes = new Map();
+      for (const record of records) {
+        const block = record.target;
+        if (!block.matches?.('.protyle-wysiwyg [data-type="NodeListItem"][data-subtype="t"]')) continue;
+        const id = block.dataset.nodeId;
+        if (!changes.has(id)) changes.set(id, { block, before: String(record.oldValue || ' ').toUpperCase() === 'X' });
+      }
+      for (const [id, { block, before }] of changes) {
+        const done = String(block.getAttribute('data-task') || ' ').toUpperCase() === 'X';
+        if (done === before) continue;
+        this.localTasks.set(id, { done, at: Date.now() });
+        const added = this.engine.localChange(id, done);
+        this.localDirty = true;
+        if (added) this.view.completeTodo({ blockId: id, element: block, progress: this.engine.state.credits.length + Object.keys(this.engine.state.pending).length, target: this.engine.state.target });
+      }
+      if (changes.size) { this.render(); this.scheduleScan(80); }
+    });
+    this.taskObserver.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['data-task'], attributeOldValue: true });
     this.ws = event => { if (event.detail?.cmd === 'transactions') this.scheduleScan(250); };
     this.eventBus.on('ws-main', this.ws);
     await this.scan();
@@ -77,16 +96,6 @@ module.exports = class GamifyForSiYuan extends Plugin {
     const result = await response.json(); if (result.code !== 0) throw new Error(result.msg || 'TODO 读取失败'); return result.data;
   }
   scheduleScan(delay) { clearTimeout(this.scanTimer); this.scanTimer = setTimeout(() => this.scan(), delay); }
-  async feedbackForClick(context) {
-    if (this.disposed || context.wasDone === true || this.observedClicks.get(context.blockId) !== context || !/^\d{14}-[a-z0-9]{7}$/.test(context.blockId)) return;
-    try {
-      const rows = await this.requestSiYuan('/api/query/sql', { stmt: `SELECT markdown FROM blocks WHERE id='${context.blockId}'` });
-      if (this.disposed || this.observedClicks.get(context.blockId) !== context) return;
-      if (taskDone(rows?.[0]?.markdown) === true && !context.feedbacked) {
-        context.feedbacked = true; this.view.completeTodo(context);
-      }
-    } catch { /* The full scan will provide feedback after a successful read. */ }
-  }
   async scan() {
     if (this.scanning || this.disposed || !this.active || this.storageFailed) return;
     this.scanning = true;
@@ -100,10 +109,24 @@ module.exports = class GamifyForSiYuan extends Plugin {
         last = page.at(-1).id; if (!/^\d{14}-[a-z0-9]{7}$/.test(last)) throw new Error('TODO 标识不正确');
       }
       if (this.disposed) return;
+      // The editor is current; SQL indexing may still contain the previous toggle.
+      const byId = new Map(rows.map(row => [row.id, row]));
+      for (const [id, local] of this.localTasks || []) {
+        const row = byId.get(id);
+        if (row && taskDone(row.markdown) === local.done) { this.localTasks.delete(id); continue; }
+        if (Date.now() - local.at > 30000) { this.localTasks.delete(id); continue; }
+        if (row) row.markdown = local.done ? '* [X]' : '* [ ]';
+        else rows.push({ id, markdown: local.done ? '* [X]' : '* [ ]' });
+      }
+      for (const block of document.querySelectorAll('.protyle-wysiwyg [data-type="NodeListItem"][data-subtype="t"][data-task]')) {
+        const row = byId.get(block.dataset.nodeId);
+        if (row) row.markdown = String(block.getAttribute('data-task')).toUpperCase() === 'X' ? '* [X]' : '* [ ]';
+      }
       this.lastScan = Date.now();
       const before = JSON.stringify(this.engine.state);
       const result = this.engine.observe(rows); this.backlog = result.backlog;
-      if (before !== JSON.stringify(this.engine.state)) await this.persist();
+      if (before !== JSON.stringify(this.engine.state) || this.localDirty) await this.persist();
+      this.localDirty = false;
       for (const id of result.completed) {
         const context = this.observedClicks.get(id);
         if (!context?.feedbacked) this.view.completeTodo(context && Date.now() - context.at < 15000 ? context : { blockId: id });
@@ -217,9 +240,9 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.view.update({ state: this.engine.state, user: this.user, backlog: this.backlog, status: !this.active ? 'paused' : waiting ? 'waiting' : this.status, message: this.message });
     const entry = document.querySelector(`[data-type="${this.name}companion"]`);
     if (entry) {
-      const { credits, target } = this.engine.state;
+      const { credits, target, pending } = this.engine.state;
       entry.setAttribute('aria-label', `Gamify for SiYuan · ${credits.length} / ${target ?? '—'}`);
-      entry.style.backgroundImage = target ? `linear-gradient(to right, #a8e8c9 ${Math.min(100, credits.length / target * 100)}%, transparent 0)` : '';
+      entry.style.backgroundImage = target ? `linear-gradient(to right, #a8e8c9 ${Math.min(100, credits.length / target * 100)}%, #c5acf980 0 ${Math.min(100, (credits.length + Object.keys(pending).length) / target * 100)}%, transparent 0)` : '';
       entry.style.backgroundSize = '100% 2px'; entry.style.backgroundPosition = 'bottom'; entry.style.backgroundRepeat = 'no-repeat';
     }
   }
@@ -231,6 +254,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
   }
   onunload() {
     this.disposed = true; clearInterval(this.timer); clearTimeout(this.scanTimer);
+    this.taskObserver?.disconnect();
     if (this.click) document.removeEventListener('click', this.click, true);
     if (this.dockClick) document.removeEventListener('click', this.dockClick, true);
     if (this.ws) this.eventBus.off('ws-main', this.ws);

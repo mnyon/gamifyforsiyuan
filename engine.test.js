@@ -4,6 +4,23 @@ import { TodoProgress, newProgress, targetFor, taskDone } from './engine.js';
 
 const row = (id, done) => ({ id, markdown: `* [${done ? 'X' : ' '}] task` });
 const start = new Date(2026, 10, 18, 12).getTime();
+test('editor completion adds pending immediately and unchecking withdraws it', () => {
+ const engine = new TodoProgress(); engine.state.target = 12;
+ assert.equal(engine.localChange('a',true,start),true);
+ assert.equal(Object.keys(engine.state.pending).length,1);
+ assert.equal(engine.localChange('a',true,start+1),false);
+ engine.localChange('a',false,start+2);
+ assert.equal(Object.keys(engine.state.pending).length,0);assert.equal(engine.state.rewards.length,0);
+});
+test('editor completion confirms after 60 seconds without another click', () => {
+ const engine = new TodoProgress(); engine.state.target=12;
+ engine.observe([row('a',false)],start);
+ engine.localChange('a',true,start+1);
+ engine.observe([row('a',true)],start+2);
+ assert.equal(engine.state.credits.length,0);
+ engine.observe([row('a',true)],start+60001);
+ assert.equal(engine.state.credits.length,1);assert.equal(Object.keys(engine.state.pending).length,0);
+});
 test('one percent rounds up with a floor of one', () => {
   for (const [count, target] of [[0, 1], [50, 1], [200, 2], [801, 9], [10000, 100]]) assert.equal(targetFor(count), target);
 });

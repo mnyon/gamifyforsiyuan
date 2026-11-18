@@ -23,6 +23,19 @@ export class TodoProgress {
     this.previous = null;
   }
 
+  localChange(id, done, now = Date.now()) {
+    const state = this.state, day = calendarDay(now);
+    state.used[day] ||= {};
+    if (!done) {
+      delete state.pending[id];
+      state.credits = state.credits.filter(credit => credit.id !== id);
+      return false;
+    }
+    if (state.pending[id] || state.credits.some(credit => credit.id === id) || state.used[day][id] === 'spent' || state.used[day][id] === true) return false;
+    state.pending[id] = { since: now, day };
+    return true;
+  }
+
   observe(rows, now = Date.now()) {
     const current = new Map(rows.map(row => [row.id, taskDone(row.markdown)]).filter(([, done]) => done !== null));
     const day = calendarDay(now);
