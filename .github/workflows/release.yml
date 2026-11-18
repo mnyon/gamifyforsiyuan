@@ -1,0 +1,23 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check tag matches manifests
+        run: |
+          node --input-type=module -e 'import fs from "node:fs"; const p=JSON.parse(fs.readFileSync("plugin.json")); const n=JSON.parse(fs.readFileSync("package.json")); if (process.env.GITHUB_REF_NAME !== "v" + p.version || n.version !== p.version) process.exit(1);'
+      - run: npm test
+      - run: npm run build
+      - name: Create draft release with production package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/package.zip --draft --title "$GITHUB_REF_NAME" --generate-notes

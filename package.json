@@ -3,6 +3,7 @@
   "version": "0.1.4",
   "description": "Complete SiYuan TODOs and earn rewards with your Habitica character.",
   "type": "module",
+  "repository": "https://github.com/mnyon/gamifyforsiyuan",
   "scripts": {
     "build": "node build.mjs",
     "build:test": "node build.mjs --test-mode",

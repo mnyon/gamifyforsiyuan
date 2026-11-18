@@ -14,7 +14,7 @@ const plain = text => {
 const bundle = `const TEST_BUILD = ${testBuild};\nconst PLUGIN_CSS = ` + JSON.stringify(read('index.css')) + ';\n' +
   ['icon.js', 'engine.js', 'habitica.js', 'storage.js', 'ui.js', 'shell.cjs'].map(file => plain(read(file))).join('\n');
 fs.writeFileSync(path.join(out, 'index.js'), bundle);
-for (const file of ["plugin.json", "README.md", "README.zh-CN.md", "Document.md", "icon.svg", "icon.png", "THIRD-PARTY-NOTICES.md", "LICENSE"]) {
+for (const file of ["plugin.json", "README.md", "README.zh-CN.md", "Document.md", "icon.svg", "icon.png", "preview.png", "THIRD-PARTY-NOTICES.md", "LICENSE", "LICENSE-HABITICA.txt"]) {
   fs.copyFileSync(path.join(root, file), path.join(out, file));
 }
 if (testBuild) {
@@ -25,7 +25,7 @@ if (testBuild) {
 fs.cpSync(path.join(root, 'images'), path.join(out, 'images'), { recursive: true });
 fs.writeFileSync(path.join(out, 'index.css'), '/* Component styles are isolated in Shadow DOM. */\n');
 // Store entries without compression; no build dependencies are required.
-const files = ['index.js', 'index.css', 'plugin.json', 'README.md', 'README.zh-CN.md', 'Document.md', 'icon.svg', 'icon.png', 'THIRD-PARTY-NOTICES.md', 'LICENSE', ...fs.readdirSync(path.join(out, 'images')).map(name => 'images/' + name)];
+const files = ['index.js', 'index.css', 'plugin.json', 'README.md', 'README.zh-CN.md', 'Document.md', 'icon.svg', 'icon.png', 'preview.png', 'THIRD-PARTY-NOTICES.md', 'LICENSE', 'LICENSE-HABITICA.txt', ...fs.readdirSync(path.join(out, 'images')).map(name => 'images/' + name)];
 let offset = 0; const chunks = [], central = [];
 for (const name of files) {
   const data = fs.readFileSync(path.join(out, name)), filename = Buffer.from(name); let crc = 0xffffffff;
