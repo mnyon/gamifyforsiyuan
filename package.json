@@ -1,11 +1,12 @@
 {
   "name": "gamify-for-siyuan",
-  "version": "0.1.3",
-  "description": "Gamification for SiYuan powered by siyuan-time-spent data.",
+  "version": "0.1.4",
+  "description": "Complete SiYuan TODOs and earn rewards with your Habitica character.",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test"
+    "build:test": "node build.mjs --test-mode",
+    "test": "node --test \"*.test.js\""
   },
   "license": "MIT"
 }

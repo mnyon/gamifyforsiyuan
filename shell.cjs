@@ -7,14 +7,17 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.storeKey = `gamify-for-siyuan:${globalThis.siyuan?.config?.system?.workspaceDir || location.origin}`;
     try { this.credentials = JSON.parse(localStorage.getItem(this.storeKey + ':credentials') || '{}'); }
     catch { this.credentials = {}; }
-    this.testMode = localStorage.getItem(this.storeKey + ':testMode') === 'true';
+    this.testMode = TEST_BUILD;
     this.view = new GamifyView({ css: PLUGIN_CSS, onConnect: value => this.connect(value), onSound: value => {
       this.credentials.sound = value; this.saveCredentials(); this.view.soundEnabled = value;
     }, onRefresh: () => this.refresh(), onResolve: retry => this.resolveRewards(retry),
-      onTestMode: value => this.setTestMode(value), onTestAction: action => this.testAction(action) });
+      /* @test-only:start */
+      onTestAction: action => this.testAction(action)
+      /* @test-only:end */
+    });
     this.view.credentials(this.credentials);
     this.message = ''; this.status = 'offline'; this.backlog = 0;
-    this.addIcons('<symbol id="iconGamifyStar" viewBox="0 0 24 24"><path d="m12 2 2.8 6.2L22 11l-7.2 2.8L12 21l-2.8-7.2L2 11l7.2-2.8L12 2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>');
+    this.addIcons(HABITICA_ICON.replace('<svg ', '<symbol id="iconGamifyHabitica" ').replace('</svg>', '</symbol>'));
     const frontend = getFrontend();
     if (!['mobile', 'browser-mobile'].includes(frontend)) {
       this.dockClick = event => {
@@ -25,10 +28,10 @@ module.exports = class GamifyForSiYuan extends Plugin {
       };
       document.addEventListener('click', this.dockClick, true);
       const plugin = this;
-      this.addDock({ type: 'companion', config: { position: 'RightBottom', size: { width: 0, height: 0 }, icon: 'iconGamifyStar', title: 'Gamify for SiYuan', show: false }, data: {},
+      this.addDock({ type: 'companion', config: { position: 'RightBottom', size: { width: 0, height: 0 }, icon: 'iconGamifyHabitica', title: 'Gamify for SiYuan', show: false }, data: {},
         init() { queueMicrotask(() => { if (!plugin.disposed) toggleRightDock(false); }); } });
     } else {
-      this.addTopBar({ icon: 'iconGamifyStar', title: 'Gamify for SiYuan', position: 'right', callback: () => this.open() });
+      this.addTopBar({ icon: 'iconGamifyHabitica', title: 'Gamify for SiYuan', position: 'right', callback: () => this.open() });
     }
     this.setting = { open: () => { this.open(); this.view.settings(true); } };
     // One writer per local workspace/browser profile. Other windows only display.
@@ -282,24 +285,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.testRows = [...new Set([...Object.keys(fresh.pending), ...fresh.credits.map(c => c.id)])].filter(id => id.startsWith('test-')).map(id => ({ id, markdown: '* [X] test' }));
     return new TodoProgress(fresh, () => crypto.randomUUID(), 3000);
   }
-  async setTestMode(enabled) {
-    if (!this.active) throw new Error('请在主窗口切换模式');
-    if (this.scanning || this.sending || this.resolving || this.connecting || this.refreshing || this.switchingMode || !this.localTasks) throw new Error('正在处理进度，请稍后再切换');
-    if (enabled === this.testMode) return;
-    this.switchingMode = true;
-    try {
-    if (this.localDirty) await this.persist();
-    const state = enabled ? this.readTestState() : await this.progressStorage.read();
-    localStorage.setItem(this.storeKey + ':testMode', String(enabled));
-    this.testMode = enabled;
-    this.engine = this.makeEngine(state);
-    this.localTasks.clear(); this.observedClicks.clear(); this.localDirty = false;
-    this.message = ''; this.storageFailed = false;
-    this.render();
-    } finally { this.switchingMode = false; }
-    await this.scan(); this.render();
-    if (!enabled && !this.client && this.credentials.userId && this.credentials.token) await this.connect(this.credentials).catch(error => this.report(error));
-  }
+  /* @test-only:start */
   async testAction(action) {
     if (!this.testMode || this.switchingMode || this.disposed) return;
     if (action === 'reward') { this.view.rewardFeedback(1); return; }
@@ -310,6 +296,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.view.completeTodo({ ...progressPreview(this.engine.state) });
     await this.scan();
   }
+  /* @test-only:end */
   onDataChanged() {
     this.storageFailed = true;
     this.message = '收到其他设备更新的进度，自动奖励已暂停；请只保留一台主设备，并重新启用插件。';

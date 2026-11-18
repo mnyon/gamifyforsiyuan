@@ -4,11 +4,12 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { newProgress } from './engine.js';
 import { execFileSync } from 'node:child_process';
+execFileSync(process.execPath, ['build.mjs', '--test-mode']);
 execFileSync(process.execPath, ['build.mjs']);
-function plugin() {
+function plugin(testBuild = true) {
  const memory = new Map();
  const context = { localStorage: { getItem: key => memory.get(key) ?? null, setItem: (key,value)=>memory.set(key,value) }, module: {exports:{}}, require: () => ({ Plugin: class { constructor() { this.kernel = { rpc: {} }; } } }), console, crypto: globalThis.crypto, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval };
- vm.runInNewContext(fs.readFileSync('dist/gamify-for-siyuan/index.js','utf8'),context);
+ vm.runInNewContext(fs.readFileSync(testBuild ? 'dist/test/gamify-for-siyuan/index.js' : 'dist/gamify-for-siyuan/index.js','utf8'),context);
  const p=new context.module.exports(); p.engine={state:{alias:'demo',credits:[],pending:{},rewards:[{id:'one',status:'queued'}],total:0}};
  p.persist=async()=>{}; p.render=()=>{};p.view={feedback:()=>{},rewardFeedback:()=>{}};p.user={stats:{hp:32,gp:1}};
  return p;
@@ -34,26 +35,23 @@ test('test persistence writes only isolated local storage', async()=>{
  p.testMode=false;await p.persist();assert.equal(writes,1);
 });
 
-test('mode switches reject while real API work is running',async()=>{
- const p=plugin();p.active=true;p.refreshing=true;
- await assert.rejects(p.setTestMode(true),/正在处理/);assert.notEqual(p.testMode,true);
- p.refreshing=false;p.connecting=true;
- await assert.rejects(p.setTestMode(true),/正在处理/);
+test('production build excludes test controls and simulated action methods',()=>{
+ const p=plugin(false);assert.equal(p.testAction,undefined);assert.equal(p.setTestMode,undefined);
+ const code=fs.readFileSync('dist/gamify-for-siyuan/index.js','utf8');
+ assert.match(code,/const TEST_BUILD = false/);assert.doesNotMatch(code,/模拟完成 TODO|预览金币特效/);
+ assert.match(fs.readFileSync('dist/test/gamify-for-siyuan/index.js','utf8'),/const TEST_BUILD = true/);
 });
 
-test('switching test mode preserves and restores real progress independently', async()=>{
- const p=plugin();p.active=true;p.testMode=false;p.credentials={};p.storeKey='mode-round-trip';
- p.localTasks=new Map();p.observedClicks=new Map();p.scan=async()=>{};
+test('test build restores only test progress without changing real progress', async()=>{
+ const p=plugin();p.storeKey='build-isolation';
  const real=newProgress();real.target=12;real.credits=[{id:'real-item',day:'2026-11-18'}];
- p.engine=p.makeEngine(structuredClone(real));
- let realWrites=0;p.progressStorage={read:async()=>structuredClone(real),write:async()=>{realWrites++}};
- delete p.persist;
- await p.setTestMode(true);assert.equal(p.engine.state.target,3);
+ p.testMode=true;p.engine=p.makeEngine(null);assert.equal(p.engine.state.target,3);
+ let realWrites=0;p.progressStorage={write:async()=>{realWrites++}};delete p.persist;
  p.engine.localChange('test-item',true);await p.persist();
- await p.setTestMode(false);
- assert.equal(JSON.stringify(p.engine.state),JSON.stringify(real));assert.equal(realWrites,0);
- await p.setTestMode(true);assert.ok(p.engine.state.pending['test-item']);
+ p.engine=p.makeEngine(p.readTestState());assert.ok(p.engine.state.pending['test-item']);
  assert.equal(p.testRows[0].id,'test-item');
+ p.testMode=false;p.engine=p.makeEngine(real);
+ assert.equal(p.engine.state.target,12);assert.equal(p.engine.state.credits[0].id,'real-item');assert.equal(realWrites,0);
 });
 test('reward is durably marked sending before the score request',async()=>{
  const p=plugin(); const events=[];p.persist=async()=>events.push(p.engine.state.rewards[0].status);

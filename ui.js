@@ -1,9 +1,10 @@
-export const STAR_ICON = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 2 2.8 6.2L22 11l-7.2 2.8L12 21l-2.8-7.2L2 11l7.2-2.8L12 2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+import { HABITICA_ICON } from './icon.js';
+export const STAR_ICON = HABITICA_ICON;
 
 import { avatarLayers } from './habitica.js';
 
 export class GamifyView {
-  constructor({ css, onConnect, onSound, onRefresh, onResolve, onTestMode = async () => {}, onTestAction = async () => {} }) {
+  constructor({ css, onConnect, onSound, onRefresh, onResolve, onTestAction = async () => {} }) {
     this.host = document.createElement('div'); this.host.id = 'gamify-for-siyuan-view';
     this.root = this.host.attachShadow({ mode: 'open' });
     this.root.innerHTML = `<style>${css}</style>
@@ -32,15 +33,10 @@ export class GamifyView {
     retry.textContent = '确认未到账，重新领取'; retry.onclick = () => onResolve(true);
     this.root.querySelector('.dashboard').append(retry);
     const form = this.root.querySelector('form');
+    /* @test-only:start */
     const testControls = document.createElement('div'); testControls.className = 'test-settings';
-    testControls.innerHTML = '<label class="sound"><input name="testMode" type="checkbox"> 测试模式</label><p class="privacy">独立模拟进度：每 3 项结算，勾选保持约 3 秒。不连接 Habitica，不修改真实奖励进度。</p>';
+    testControls.innerHTML = '<span class="eyebrow">测试构建 · 仅模拟奖励</span><p class="privacy">独立模拟进度：每 3 项结算，勾选保持约 3 秒。不连接 Habitica，不修改真实奖励进度。日常使用请安装正式包。</p>';
     form.prepend(testControls);
-    form.elements.testMode.onchange = async () => {
-      const input = form.elements.testMode; input.disabled = true;
-      try { await onTestMode(input.checked); this.formStatus(''); this.settings(false); }
-      catch (error) { input.checked = !!this.testMode; this.formStatus(error.message); }
-      finally { input.disabled = false; }
-    };
     const testActions = document.createElement('div'); testActions.className = 'test-actions'; testActions.hidden = true;
     testActions.innerHTML = '<span class="eyebrow">测试模式 · 奖励均为模拟</span><div><button type="button" class="text" data-action="todo">模拟完成 TODO</button><button type="button" class="text" data-action="reward">预览金币特效</button></div>';
     testActions.onclick = async event => {
@@ -50,6 +46,7 @@ export class GamifyView {
       finally { button.disabled = false; }
     };
     this.root.querySelector('.dashboard').prepend(testActions);
+    /* @test-only:end */
     form.onsubmit = async event => {
       event.preventDefault(); const button = form.querySelector('.primary'); button.disabled = true; this.formStatus('正在连接……');
       try { await onConnect({ userId: form.elements.userId.value.trim(), token: form.elements.token.value.trim(), sound: form.elements.sound.checked }); this.formStatus('连接成功'); this.settings(false); }
@@ -70,9 +67,10 @@ export class GamifyView {
   close() { this.card.hidden = true; }
   update({ state, user, message = '', status = 'offline', backlog = 0, testMode = false }) {
     this.testMode = testMode;
-    this.root.querySelector('form').elements.testMode.checked = testMode;
+    /* @test-only:start */
     this.root.querySelector('.test-actions').hidden = !testMode;
     this.root.querySelector('.primary').disabled = testMode;
+    /* @test-only:end */
     if (testMode) user = { profile: { name: '练习中的冒险者' }, stats: { lvl: 1, hp: 50, maxHealth: 50, gp: state.total, class: 'warrior' } };
     const text = (selector, value) => { this.root.querySelector(selector).textContent = value; };
     const progress = Math.min(state.credits.length, state.target || 0), target = state.target;
