@@ -45,7 +45,8 @@ module.exports = class GamifyForSiYuan extends Plugin {
   }
 
   async initializeWriter() {
-    const state = await this.loadData('progress.json');
+    this.progressStorage = new ProgressStorage(this.name);
+    const state = await this.progressStorage.read();
     if (this.disposed) return;
     this.engine = new TodoProgress(state || newProgress());
     this.observedClicks = new Map();
@@ -70,7 +71,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
     if (this.credentials.userId && this.credentials.token) await this.connect(this.credentials).catch(error => this.report(error));
   }
 
-  async kernel(path, body) {
+  async requestSiYuan(path, body) {
     const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error('思源暂时无法读取 TODO');
     const result = await response.json(); if (result.code !== 0) throw new Error(result.msg || 'TODO 读取失败'); return result.data;
@@ -79,7 +80,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
   async feedbackForClick(context) {
     if (this.disposed || context.wasDone === true || this.observedClicks.get(context.blockId) !== context || !/^\d{14}-[a-z0-9]{7}$/.test(context.blockId)) return;
     try {
-      const rows = await this.kernel('/api/query/sql', { stmt: `SELECT markdown FROM blocks WHERE id='${context.blockId}'` });
+      const rows = await this.requestSiYuan('/api/query/sql', { stmt: `SELECT markdown FROM blocks WHERE id='${context.blockId}'` });
       if (this.disposed || this.observedClicks.get(context.blockId) !== context) return;
       if (taskDone(rows?.[0]?.markdown) === true && !context.feedbacked) {
         context.feedbacked = true; this.view.completeTodo(context);
@@ -93,7 +94,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
       // Keyset pagination avoids SiYuan's default SQL result cap.
       let last = ''; const rows = [];
       for (;;) {
-        const page = await this.kernel('/api/query/sql', { stmt: `SELECT id, substr(markdown, 1, instr(markdown || char(10), char(10))-1) AS markdown FROM blocks WHERE type = 'i' AND subtype = 't' AND id > '${last}' ORDER BY id LIMIT 1000` });
+        const page = await this.requestSiYuan('/api/query/sql', { stmt: `SELECT id, substr(markdown, 1, instr(markdown || char(10), char(10))-1) AS markdown FROM blocks WHERE type = 'i' AND subtype = 't' AND id > '${last}' ORDER BY id LIMIT 1000` });
         if (!Array.isArray(page)) throw new Error('TODO 查询结果不正确');
         rows.push(...page); if (!page.length) break;
         last = page.at(-1).id; if (!/^\d{14}-[a-z0-9]{7}$/.test(last)) throw new Error('TODO 标识不正确');
@@ -115,12 +116,18 @@ module.exports = class GamifyForSiYuan extends Plugin {
   }
   async persist() {
     const snapshot = JSON.parse(JSON.stringify(this.engine.state));
-    try { await this.saveData('progress.json', snapshot); }
-    catch { this.storageFailed = true; throw new Error('进度保存失败，已暂停奖励；请检查存储后重新启用插件'); }
+    try { await this.progressStorage.write(snapshot); }
+    catch (error) {
+      this.storageFailed = true;
+      const detail = error?.message || error?.msg || '本地文件写入失败';
+      throw new Error(`进度保存失败，已暂停奖励（${detail}）；请重新启用插件后重试`);
+    }
   }
   saveCredentials() { localStorage.setItem(this.storeKey + ':credentials', JSON.stringify(this.credentials)); }
   async connect(value) {
     if (!this.active) throw new Error('请在主窗口连接 Habitica');
+    if (!this.progressStorage || this.engine.state.target === null) throw new Error(this.message || 'TODO 进度尚未初始化，请稍后重试');
+    if (this.storageFailed) throw new Error(this.message || '进度保存已暂停，请重新启用插件');
     if (!/^[a-f0-9-]{36}$/i.test(value.userId) || !/^[a-f0-9-]{36}$/i.test(value.token)) throw new Error('请输入完整的 User ID 和 API Token');
     if (this.engine.state.account && this.engine.state.account !== value.userId) throw new Error('当前进度属于另一个 Habitica 账号；请先完成原账号结算');
     this.status = 'checking'; this.render();

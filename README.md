@@ -18,6 +18,8 @@ A bottom-right dock icon opens a compact character card with your actual costume
 
 ## Install and connect
 
+Version 0.1.1 fixes a collision with SiYuan's `kernel` instance property and uses explicit, timeout-bounded file API calls for progress reads/writes. Failed reads do not reset existing progress; failed saves retain the underlying explanation. Disable version 0.1.0, replace the plugin folder, then re-enable. Existing `storage/petal/gamify-for-siyuan/progress.json` is preserved.
+
 Build, then copy `dist/gamify-for-siyuan` into your workspace's `data/plugins/` directory. Restart/reload SiYuan and enable the plugin. Open the bottom-right star and enter Habitica User ID and API Token. Connecting creates the dedicated Habit; connection itself does not score it. Mobile uses a top-bar entry.
 
 Credentials are stored in this device's browser storage, not the synced plugin data, source, or package. They are not encrypted; clear them by clearing this plugin's local browser storage. Only Habitica receives credentials. Note text is never sent to Habitica. Character layers load from Habitica's official asset host; unavailable layers are omitted.

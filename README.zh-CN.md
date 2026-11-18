@@ -18,6 +18,8 @@
 
 ## 安装与连接
 
+0.1.1 修复了思源新版 `kernel` 实例属性与插件请求方法重名的问题。进度读写改用带超时和返回值检查的文件 API；存储失败会保留具体原因，读取失败不会重置旧进度。从 0.1.0 更新时先禁用插件，覆盖插件文件夹后重新启用即可，已有 `storage/petal/gamify-for-siyuan/progress.json` 保留。
+
 运行构建后，把 `dist/gamify-for-siyuan` 文件夹复制到思源工作空间的 `data/plugins/`，重新加载思源并启用插件。也会生成 `dist/package.zip` 安装包。
 
 点击右下角星形入口，填写 Habitica 的 User ID 和 API Token。首次连接创建专用习惯，但不会给它加分。移动端使用顶部入口。

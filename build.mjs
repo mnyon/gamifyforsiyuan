@@ -8,7 +8,7 @@ fs.mkdirSync(out, { recursive: true });
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const plain = text => text.replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
 const bundle = 'const PLUGIN_CSS = ' + JSON.stringify(read('index.css')) + ';\n' +
-  ['engine.js', 'habitica.js', 'ui.js'].map(file => plain(read(file))).join('\n') + '\n' + read('shell.cjs');
+  ['engine.js', 'habitica.js', 'storage.js', 'ui.js'].map(file => plain(read(file))).join('\n') + '\n' + read('shell.cjs');
 fs.writeFileSync(path.join(out, 'index.js'), bundle);
 for (const file of ["plugin.json", "README.md", "README.zh-CN.md", "icon.svg", "icon.png", "THIRD-PARTY-NOTICES.md", "LICENSE"]) {
   fs.copyFileSync(path.join(root, file), path.join(out, file));

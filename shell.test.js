@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
 execFileSync(process.execPath, ['build.mjs']);
 function plugin() {
- const context = { module: {exports:{}}, require: () => ({ Plugin: class {} }), console, crypto: globalThis.crypto, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval };
+ const context = { module: {exports:{}}, require: () => ({ Plugin: class { constructor() { this.kernel = { rpc: {} }; } } }), console, crypto: globalThis.crypto, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval };
  vm.runInNewContext(fs.readFileSync('dist/gamify-for-siyuan/index.js','utf8'),context);
  const p=new context.module.exports(); p.engine={state:{alias:'demo',credits:[],pending:{},rewards:[{id:'one',status:'queued'}],total:0}};
  p.persist=async()=>{}; p.render=()=>{};p.view={feedback:()=>{},rewardFeedback:()=>{}};p.user={stats:{hp:32,gp:1}};
@@ -45,4 +45,12 @@ test('a failed visual effect cannot requeue a successful reward',async()=>{
  p.client={user:async()=>({stats:{gp:1}}),task:async()=>({priority:.1,type:'habit',up:true,down:false}),score:async()=>{calls++;return {gp:2}}};
  await p.flushRewards();p.retryAfter=0;await p.flushRewards();
  assert.equal(calls,1);assert.equal(p.engine.state.rewards[0].status,'sent');assert.equal(p.engine.state.total,1);
+});
+test('SiYuan kernel property cannot shadow the plugin HTTP method', () => {
+ const p=plugin();assert.equal(typeof p.kernel,'object');assert.equal(typeof p.requestSiYuan,'function');
+});
+test('save failures retain the kernel explanation and pause scoring', async()=>{
+ const p=plugin();delete p.persist;
+ p.progressStorage={write:async()=>{throw new Error('disk full')}};
+ await assert.rejects(p.persist(),/disk full/);assert.equal(p.storageFailed,true);
 });

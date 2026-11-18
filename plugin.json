@@ -2,7 +2,7 @@
   "name": "gamify-for-siyuan",
   "author": "",
   "url": "",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "icon": "icon.png",
   "minAppVersion": "3.8.5",
   "backends": ["all"],
