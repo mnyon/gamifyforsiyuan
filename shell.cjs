@@ -54,7 +54,10 @@ module.exports = class GamifyForSiYuan extends Plugin {
       const action = event.target.closest?.('.protyle-action--task');
       const block = action?.closest('[data-node-id][data-subtype="t"]');
       if (!block) return;
-      this.observedClicks.set(block.dataset.nodeId, { x: event.clientX, y: event.clientY, at: Date.now() });
+      const context = { point: { x: event.clientX, y: event.clientY }, at: Date.now(), element: block, blockId: block.dataset.nodeId, wasDone: this.engine.previous?.get(block.dataset.nodeId) };
+      this.observedClicks.set(block.dataset.nodeId, context);
+      // Read this one block first so visual feedback need not wait for the workspace scan.
+      this.view.later(() => this.feedbackForClick(context), 100);
       this.view.unlockSound(); this.scheduleScan(180);
     };
     document.addEventListener('click', this.click, true);
@@ -73,6 +76,16 @@ module.exports = class GamifyForSiYuan extends Plugin {
     const result = await response.json(); if (result.code !== 0) throw new Error(result.msg || 'TODO 读取失败'); return result.data;
   }
   scheduleScan(delay) { clearTimeout(this.scanTimer); this.scanTimer = setTimeout(() => this.scan(), delay); }
+  async feedbackForClick(context) {
+    if (this.disposed || context.wasDone === true || this.observedClicks.get(context.blockId) !== context || !/^\d{14}-[a-z0-9]{7}$/.test(context.blockId)) return;
+    try {
+      const rows = await this.kernel('/api/query/sql', { stmt: `SELECT markdown FROM blocks WHERE id='${context.blockId}'` });
+      if (this.disposed || this.observedClicks.get(context.blockId) !== context) return;
+      if (taskDone(rows?.[0]?.markdown) === true && !context.feedbacked) {
+        context.feedbacked = true; this.view.completeTodo(context);
+      }
+    } catch { /* The full scan will provide feedback after a successful read. */ }
+  }
   async scan() {
     if (this.scanning || this.disposed || !this.active || this.storageFailed) return;
     this.scanning = true;
@@ -91,10 +104,11 @@ module.exports = class GamifyForSiYuan extends Plugin {
       const result = this.engine.observe(rows); this.backlog = result.backlog;
       if (before !== JSON.stringify(this.engine.state)) await this.persist();
       for (const id of result.completed) {
-        const point = this.observedClicks.get(id);
-        this.view.feedback('完成了一件小事 · 正在确认', false, point && Date.now() - point.at < 15000 ? point : undefined);
+        const context = this.observedClicks.get(id);
+        if (!context?.feedbacked) this.view.completeTodo(context && Date.now() - context.at < 15000 ? context : { blockId: id });
         this.observedClicks.delete(id);
       }
+      for (const [id, context] of this.observedClicks) if (Date.now() - context.at > 15000) this.observedClicks.delete(id);
       this.render(); await this.flushRewards();
     } catch (error) { this.report(error); }
     finally { this.scanning = false; }
@@ -132,22 +146,29 @@ module.exports = class GamifyForSiYuan extends Plugin {
         try { task = await this.client.task(this.engine.state.alias); }
         catch (error) { this.retryAfter = Date.now() + 60000; throw error; }
         if (task.priority !== 0.1 || task.type !== 'habit' || task.down || !task.up) throw new Error('专用习惯设置已改变，请恢复琐事难度、仅正向');
+        // A fresh balance is required: the cached character may be minutes old.
+        const playerBefore = await this.client.user();
+        reward.goldBefore = playerBefore.stats?.gp;
         reward.before = task.counterUp || 0;
         reward.historyBefore = (task.history || []).reduce((sum, item) => sum + (item.scoredUp || 0), 0);
         reward.status = 'sending'; reward.attempted = Date.now(); await this.persist();
         try {
           const stats = await this.client.score(this.engine.state.alias);
+          const change = Number.isFinite(reward.goldBefore) && Number.isFinite(stats.gp) ? stats.gp - reward.goldBefore : null;
+          reward.gold = change !== null && change >= 0 ? change : null;
           reward.status = 'sent'; this.engine.state.total++; await this.persist();
           if (this.user) this.user.stats = { ...this.user.stats, ...stats };
           this.message = ''; this.status = 'online'; this.render();
-          this.view.feedback('领取成功 · 每一步，都有回响', true);
+          this.view.rewardFeedback(reward.gold, { blockId: reward.sources?.at(-1) });
         } catch (error) {
+          // A visual error or failed post-score save must never requeue a scored reward.
+          if (reward.status === 'sent') throw error;
           reward.status = error.uncertain ? 'uncertain' : 'queued'; await this.persist();
           this.retryAfter = Date.now() + 60000;
           throw error;
         }
       }
-    } catch (error) { this.status = 'waiting'; this.message = error.message + '；进度已保留'; this.render(); }
+    } catch (error) { this.retryAfter = Date.now() + 60000; this.status = 'waiting'; this.message = error.message + '；进度已保留'; this.render(); }
     finally { this.sending = false; }
   }
   async resolveRewards(retry = false) {

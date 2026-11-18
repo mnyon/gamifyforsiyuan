@@ -65,7 +65,7 @@ export class TodoProgress {
     while (state.credits.length >= state.target) {
       const credits = state.credits.splice(0, state.target);
       for (const credit of credits) state.used[credit.day][credit.id] = 'spent';
-      state.rewards.push({ id: this.uid(), status: 'queued', created: now, count: credits.length });
+      state.rewards.push({ id: this.uid(), status: 'queued', created: now, count: credits.length, sources: credits.map(credit => credit.id) });
       state.target = state.snapshot.target;
     }
     return { completed, backlog, pending: Object.keys(state.pending).length };

@@ -10,15 +10,15 @@ export class GamifyView {
       <section class="card" aria-label="Gamify for SiYuan" hidden>
         <header><div class="brand">${STAR_ICON}<span>GAMIFY <b>for SiYuan</b></span></div><div class="tools"><button class="icon settings-toggle" aria-label="连接设置" title="连接设置">⚙</button><button class="icon close" aria-label="收起卡片">×</button></div></header>
         <div class="dashboard">
-          <div class="scene"><div class="orbit"></div><i class="star s1">✦</i><i class="star s2">✧</i><i class="star s3">·</i><i class="star s4">✦</i><div class="moon"></div><div class="hill back"></div><div class="hill front"></div><div class="pedestal"></div><div class="avatar" role="img" aria-label="Habitica 角色"><span class="placeholder">✧</span></div><span class="scene-caption">一点一滴，皆是成长</span></div>
+          <div class="scene"><div class="orbit"></div><i class="star s1">✦</i><i class="star s2">✧</i><i class="star s3">·</i><i class="star s4">✦</i><div class="moon"></div><div class="hill back"></div><div class="hill front"></div><div class="pedestal"></div><div class="avatar" role="img" aria-label="Habitica 角色"><span class="placeholder">✧</span></div></div>
           <div class="identity"><span class="eyebrow player-caption">YOUR ADVENTURE</span><h2 class="player-name">冒险，从这里开始</h2><div class="player-meta">连接你的 Habitica 角色</div></div>
           <div class="vitals" hidden><div class="bar-label"><span><i class="heart">♥</i> 生命值</span><span class="hp-text"></span></div><div class="track hp"><span></span></div><div class="coins"><span>◈ <b class="gold">0</b> 金币</span><span class="level"></span></div></div>
           <div class="quest"><div class="quest-top"><span class="eyebrow">下一次奖励</span><span class="fraction"><b class="progress">0</b><span> / </span><span class="target">—</span></span></div><div class="track reward"><span></span></div><p class="remaining">连接后，开始积累每一个完成</p><div class="pending"></div></div>
           <div class="connection"><span class="connection-dot"></span><span class="connection-label">尚未连接 Habitica</span><button class="text refresh">刷新</button></div><div class="notice" role="status"></div><button class="resolve" hidden>核对待领取奖励</button>
         </div>
         <form class="settings" hidden autocomplete="off"><span class="eyebrow">连接你的冒险</span><h2>与 Habitica 同行</h2><p>完成笔记里的小事，也让角色向前一步。</p><label>User ID<input name="userId" required spellcheck="false" autocomplete="off" placeholder="Habitica 用户 ID"></label><label>API Token<input name="token" type="password" required autocomplete="off" placeholder="Habitica API Token"></label><a href="https://habitica.com/user/settings/api" target="_blank" rel="noopener noreferrer">在 Habitica 中查看连接信息 ↗</a><label class="sound"><input name="sound" type="checkbox" checked> 完成音效<span>轻巧、短促的回应</span></label><button class="primary" type="submit">连接并保存</button><p class="privacy">凭据仅保存在当前设备；不上传笔记内容。连接时会创建一个最低难度的专用正向习惯。</p><div class="form-status" role="status"></div></form>
-        <footer><span class="footer-star">✧</span> 每一件小事，都算数。</footer>
-      </section><div class="toast" role="status" hidden>${STAR_ICON}<span></span></div><div class="particles" aria-hidden="true"></div>`;
+      </section><div class="toast" role="status" hidden>${STAR_ICON}<span></span></div><div class="particles" aria-hidden="true"></div><div class="line-effects" aria-hidden="true"></div><div class="announcer" role="status"></div>`;
+    this.effects = new Set(); this.effectTimers = new Set();
     document.body.append(this.host); this.card = this.root.querySelector('.card');
     this.root.querySelector('.close').onclick = () => this.close();
     this.root.querySelector('.settings-toggle').onclick = () => this.settings(!this.isSettings);
@@ -58,7 +58,7 @@ export class GamifyView {
     const waiting = state.rewards.filter(r => r.status !== 'sent').length;
     text('.remaining', waiting ? `${waiting} 次奖励待领取 · 继续积累下一轮` : target ? `再完成 ${Math.max(0, target - progress)} 个 TODO，迎接下一次奖励` : '正在读取你的 TODO……');
     const pending = Object.keys(state.pending).length;
-    text('.pending', pending ? `${pending} 个完成正在确认 · 保持勾选 60 秒` : `未完成 ${backlog.toLocaleString()} 项 · 本轮目标固定，进度跨天保留`);
+    text('.pending', pending ? `${pending} 项待计入 · 保持勾选 60 秒` : `未完成 ${backlog.toLocaleString()} 项 · 本轮目标固定，进度跨天保留`);
     text('.notice', message);
     text('.connection-label', { online: 'Habitica 已连接', offline: '尚未连接 Habitica', waiting: '奖励待领取', paused: '当前窗口仅展示', checking: '正在连接 Habitica' }[status] || status);
     this.root.querySelector('.connection-dot').dataset.status = status;
@@ -96,19 +96,103 @@ export class GamifyView {
       oscillator.type = 'sine'; oscillator.frequency.value = frequency; gain.gain.setValueAtTime(0, start); gain.gain.linearRampToValueAtTime(0.055, start + 0.012); gain.gain.exponentialRampToValueAtTime(0.001, start + 0.32);
       oscillator.connect(gain); gain.connect(this.audio.destination); oscillator.start(start); oscillator.stop(start + 0.35);
     });
+    if (celebrate) [1568, 2093, 2637].forEach((frequency, i) => {
+      const start = this.audio.currentTime + 0.42 + i * 0.09;
+      const tone = this.audio.createOscillator(), gain = this.audio.createGain();
+      tone.type = 'triangle'; tone.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.018, start); gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
+      tone.connect(gain); gain.connect(this.audio.destination); tone.start(start); tone.stop(start + 0.18);
+    });
   }
-  feedback(message, celebrate = false, point) {
-    const toast = this.root.querySelector('.toast'); toast.querySelector('span').textContent = message; toast.hidden = false; toast.classList.toggle('celebrate', celebrate);
-    clearTimeout(this.toastTimer); this.toastTimer = setTimeout(() => { toast.hidden = true; }, 2800); this.chime(celebrate);
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const rect = this.card.getBoundingClientRect(), x = point?.x ?? (this.card.hidden ? innerWidth - 44 : rect.left + rect.width / 2), y = point?.y ?? (this.card.hidden ? innerHeight - 70 : rect.top + 155);
+  later(callback, delay) {
+    const timer = setTimeout(() => { this.effectTimers.delete(timer); callback(); }, delay);
+    this.effectTimers.add(timer); return timer;
+  }
+  visibleTodo({ blockId, element } = {}) {
+    const candidates = element?.isConnected ? [element] : blockId ? document.querySelectorAll(`[data-node-id="${CSS.escape(blockId)}"]`) : [];
+    return [...candidates].find(node => {
+      const r = node.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+    });
+  }
+  completeTodo(context = {}) {
+    if (this.effects.size >= 16) return;
+    const element = this.visibleTodo(context);
+    if (!element) { this.feedback('完成了一件事', false, context.point); return; }
+    this.chime(false);
+    this.root.querySelector('.announcer').textContent = '完成了一件事';
+    const field = this.root.querySelector('.line-effects');
+    // These overlays never become children of the editor or change note content.
+    const effect = document.createElement('div'); effect.className = 'line-complete';
+    effect.innerHTML = '<span class="line-sweep"></span><span class="success-mark"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="13"/><path d="m10 16 4 4 8-9"/></svg></span><span class="line-label">完成了一件事</span>';
+    field.append(effect);
+    const entry = { effect, element, blockId: context.blockId };
+    this.effects.add(entry);
+    const position = () => {
+      const target = this.visibleTodo(entry);
+      if (!target) { effect.hidden = true; return; }
+      entry.element = target;
+      const r = target.getBoundingClientRect();
+      const action = target.querySelector('.protyle-action--task')?.getBoundingClientRect();
+      const height = Math.min(54, r.height), cy = action ? action.top + action.height / 2 - r.top : height / 2;
+      effect.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${height}px;--cy:${cy}px;--cx:${action ? action.left + action.width / 2 - r.left : 14}px;--label-x:${Math.max(40, Math.min(r.width - 146, 180))}px`;
+    };
+    position();
+    const r = effect.getBoundingClientRect();
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) this.sparkles({ x: r.left + 18, y: r.top + Math.min(27, r.height / 2) }, 14);
+    const follow = () => { if (this.effects.has(entry)) { position(); entry.frame = requestAnimationFrame(follow); } };
+    entry.frame = requestAnimationFrame(follow);
+    this.later(() => { this.effects.delete(entry); cancelAnimationFrame(entry.frame); effect.remove(); }, 1350);
+  }
+  rewardFeedback(gold, context = {}) {
+    const known = typeof gold === 'number' && Number.isFinite(gold) && gold >= 0;
+    const message = known ? `获得 ${gold.toFixed(2)} 金币` : '已获得 Habitica 奖励';
+    this.feedback(message, true, undefined, false);
+    this.root.querySelector('.toast').classList.add('coin-toast');
     const field = this.root.querySelector('.particles');
-    for (let i = 0; i < (celebrate ? 30 : 9); i++) {
-      if (field.childElementCount > 80) break;
-      const particle = document.createElement('i'); particle.textContent = i % 3 ? '✦' : '·';
-      particle.style.cssText = `left:${x}px;top:${y}px;--dx:${Math.cos(i * 2.4) * (celebrate ? 110 : 48)}px;--dy:${Math.sin(i * 2.4) * (celebrate ? 100 : 44) - 30}px;--delay:${i * 9}ms;color:${['#a8e8c9', '#d5c1ff', '#ffe6a0'][i % 3]}`;
-      field.append(particle); particle.addEventListener('animationend', () => particle.remove(), { once: true });
+    const cardRect = this.card.getBoundingClientRect();
+    const source = this.visibleTodo(context)?.getBoundingClientRect();
+    const origin = source ? { x: Math.min(innerWidth - 90, source.left + Math.min(190, source.width / 2)), y: Math.max(35, source.top + Math.min(28, source.height / 2)) } :
+      this.card.hidden ? { x: innerWidth - 150, y: innerHeight - 140 } : { x: cardRect.left + cardRect.width / 2, y: cardRect.top + 145 };
+    const goldNode = !this.card.hidden && !this.isSettings ? this.root.querySelector('.gold') : null;
+    const dock = document.querySelector('[data-type="gamify-for-siyuancompanion"]');
+    const destination = (goldNode || dock)?.getBoundingClientRect();
+    const end = destination?.width ? { x: destination.left + destination.width / 2, y: destination.top + destination.height / 2 } : { x: innerWidth - 25, y: innerHeight - 60 };
+    const loot = document.createElement('div'); loot.className = 'loot-number'; loot.textContent = known ? `+${gold.toFixed(2)} 金币` : '获得奖励';
+    loot.style.cssText = `left:${Math.max(85, Math.min(innerWidth - 100, origin.x))}px;top:${origin.y - 22}px`; field.append(loot);
+    this.later(() => loot.remove(), 1800);
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    this.sparkles(origin, 24, true);
+    const available = Math.max(0, 96 - field.childElementCount);
+    for (let i = 0; i < Math.min(16, available); i++) {
+      const coin = document.createElement('i'); coin.className = 'coin-flight'; coin.innerHTML = '<span>✧</span>';
+      const angle = i * 2.39996, radius = 32 + (i % 5) * 12;
+      coin.style.cssText = `left:${origin.x}px;top:${origin.y}px;--burst-x:${Math.cos(angle) * radius}px;--burst-y:${Math.sin(angle) * radius - 45}px;--land-x:${end.x - origin.x}px;--land-y:${end.y - origin.y}px;--coin-delay:${i * 28}ms;--turn:${i * 70}deg`;
+      field.append(coin); this.later(() => coin.remove(), 1900 + i * 28);
+    }
+    if (goldNode) this.later(() => {
+      const animation = goldNode.animate([{ color: '#fff2bb', textShadow: '0 0 14px #ffd166', transform: 'scale(1.2)' }, { color: 'inherit', textShadow: 'none', transform: 'scale(1)' }], { duration: 550 });
+      animation.finished.catch(() => {});
+    }, 1000);
+  }
+  sparkles(point, count = 9, gold = false) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const field = this.root.querySelector('.particles');
+    for (let i = 0; i < count; i++) {
+      if (field.childElementCount > 72) break;
+      const particle = document.createElement('i'); particle.className = 'spark'; particle.textContent = i % 3 ? '✦' : '·';
+      particle.style.cssText = `left:${point.x}px;top:${point.y}px;--dx:${Math.cos(i * 2.4) * (gold ? 100 : 56)}px;--dy:${Math.sin(i * 2.4) * (gold ? 85 : 42) - 24}px;--delay:${i * 8}ms;color:${gold ? ['#ffe7a0', '#ffd166', '#fff9d4'][i % 3] : ['#a8e8c9', '#d5c1ff', '#e4fff1'][i % 3]}`;
+      field.append(particle); this.later(() => particle.remove(), 1200);
     }
   }
-  destroy() { clearTimeout(this.toastTimer); this.audio?.close(); document.removeEventListener('pointerdown', this.outside); document.removeEventListener('keydown', this.escape); this.host.remove(); }
+  feedback(message, celebrate = false, point, emitStars = true) {
+    const toast = this.root.querySelector('.toast'); toast.querySelector('span').textContent = message; toast.hidden = false; toast.classList.toggle('celebrate', celebrate);
+    toast.classList.remove('coin-toast');
+    clearTimeout(this.toastTimer); this.toastTimer = setTimeout(() => { toast.hidden = true; }, 2800); this.chime(celebrate);
+    if (!emitStars) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const rect = this.card.getBoundingClientRect(), x = point?.x ?? (this.card.hidden ? innerWidth - 44 : rect.left + rect.width / 2), y = point?.y ?? (this.card.hidden ? innerHeight - 70 : rect.top + 155);
+    this.sparkles({ x, y }, celebrate ? 30 : 9);
+  }
+  destroy() { clearTimeout(this.toastTimer); for (const timer of this.effectTimers) clearTimeout(timer); for (const entry of this.effects) cancelAnimationFrame(entry.frame); this.effects.clear(); this.audio?.close(); document.removeEventListener('pointerdown', this.outside); document.removeEventListener('keydown', this.escape); this.host.remove(); }
 }

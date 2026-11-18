@@ -2,7 +2,7 @@
 
 Complete TODOs in SiYuan. Watch your Habitica character grow, one small step at a time.
 
-A bottom-right dock icon opens a compact character card with your actual costume, level, HP, gold and reward progress. Completion plays a gentle synthesized chime and star particles; successful Habitica rewards receive a stronger celebration. Dark/light themes and reduced motion are supported.
+A bottom-right dock icon opens a compact character card with your actual costume, level, HP, gold and reward progress. Completion adds a sweep, animated check and floating text at the actual TODO line, with a gentle chime. Separate overlays follow scrolling and never alter note content. Successful rewards show the actual balance increase; gold coins burst outward and collect at the gold counter or dock. If a balance is unavailable, only a generic reward confirmation is shown. Dark/light themes and reduced motion are supported.
 
 ## Reward rules
 
