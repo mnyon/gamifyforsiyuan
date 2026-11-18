@@ -63,7 +63,7 @@ export class GamifyView {
     form.elements.sound.checked = value.sound !== false; this.soundEnabled = value.sound !== false;
   }
   settings(show) { this.isSettings = show; this.root.querySelector('.settings').hidden = !show; this.root.querySelector('.dashboard').hidden = show; if (show) this.root.querySelector('input').focus(); }
-  open(opener) { this.opener = opener; this.card.hidden = false; this.root.querySelector('.close').focus(); this.unlockSound(); }
+  open(opener) { this.opener = opener; this.card.hidden = false; if (!this.host.classList.contains('mobile')) this.root.querySelector('.close').focus(); this.unlockSound(); }
   close() { this.card.hidden = true; }
   update({ state, user, message = '', status = 'offline', backlog = 0, testMode = false }) {
     this.testMode = testMode;

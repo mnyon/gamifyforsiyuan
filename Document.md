@@ -2,6 +2,8 @@
 
 Complete TODOs in SiYuan. Watch your Habitica character grow, one small step at a time.
 
+On desktop the character card opens from the bottom-right Habitica icon. On mobile it opens from the top bar as a full-width bottom sheet with touch-sized controls and safe-area spacing. The same TODO progress, inline feedback, sounds, reward effects, and Habitica connection are available on both layouts; the mobile layout avoids relying on the desktop dock or keyboard focus.
+
 ## 快速开始
 
 安装正式包后，点击思源右下角 Habitica 图标，在设置中填写 User ID 和 API Token。完成标准 TODO 后立即显示待确认进度，保持勾选 60 秒后计入；达到目标自动领取奖励。取消勾选会撤回尚未结算的贡献，多出的贡献进入下一轮。每轮目标约为每日未完成 TODO 数量的 1%，至少 1 项。

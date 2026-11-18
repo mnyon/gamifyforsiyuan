@@ -8,6 +8,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
     try { this.credentials = JSON.parse(localStorage.getItem(this.storeKey + ':credentials') || '{}'); }
     catch { this.credentials = {}; }
     this.testMode = TEST_BUILD;
+    this.isMobile = ['mobile', 'browser-mobile'].includes(getFrontend());
     this.view = new GamifyView({ css: PLUGIN_CSS, onConnect: value => this.connect(value), onSound: value => {
       this.credentials.sound = value; this.saveCredentials(); this.view.soundEnabled = value;
     }, onRefresh: () => this.refresh(), onResolve: retry => this.resolveRewards(retry),
@@ -16,6 +17,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
       /* @test-only:end */
     });
     this.view.credentials(this.credentials);
+    this.view.host.classList.toggle('mobile', this.isMobile);
     this.message = ''; this.status = 'offline'; this.backlog = 0;
     this.addIcons(HABITICA_ICON.replace('<svg ', '<symbol id="iconGamifyHabitica" ').replace('</svg>', '</symbol>'));
     const frontend = getFrontend();
@@ -44,7 +46,11 @@ module.exports = class GamifyForSiYuan extends Plugin {
         catch (error) { this.message = error.message; this.status = 'waiting'; this.render(); }
       }).catch(error => { if (error.name !== 'AbortError') this.report(error); });
     } else {
-      this.message = '当前环境不支持多窗口保护，自动奖励暂未启用'; this.status = 'paused';
+      // Mobile SiYuan normally has one active app window and some WebViews do not
+      // expose Web Locks. Keep the mobile plugin usable while retaining the lock
+      // protection whenever the runtime provides it.
+      this.active = true;
+      this.initializeWriter().catch(error => { this.message = error.message; this.status = 'waiting'; this.render(); });
     }
     this.engine = this.engine || new TodoProgress(); this.render();
   }
