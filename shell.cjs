@@ -18,6 +18,13 @@ module.exports = class GamifyForSiYuan extends Plugin {
     });
     this.view.credentials(this.credentials);
     this.view.host.classList.toggle('mobile', this.isMobile);
+    if (this.isMobile) {
+      // SiYuan may leave its presentation class behind after unchecking on a
+      // mobile WebView. Follow the explicit blank marker without editing notes.
+      this.mobileTaskStyle = document.createElement('style');
+      this.mobileTaskStyle.textContent = '.protyle-wysiwyg .li[data-type="NodeListItem"][data-subtype="t"][data-task=" "].protyle-task--done > div[data-node-id].p { color: inherit; text-decoration: none; }';
+      document.head.append(this.mobileTaskStyle);
+    }
     this.message = ''; this.status = 'offline'; this.backlog = 0;
     this.addIcons(HABITICA_ICON.replace('<svg ', '<symbol id="iconGamifyHabitica" ').replace('</svg>', '</symbol>'));
     const frontend = getFrontend();
@@ -57,6 +64,10 @@ module.exports = class GamifyForSiYuan extends Plugin {
 
   async initializeWriter() {
     this.progressStorage = new ProgressStorage(this.name);
+    if (!this.testMode) {
+      try { await this.restoreSharedConnection(); }
+      catch { this.message = '未能读取同步连接信息；可以稍后刷新，或手动填写'; }
+    }
     const state = this.testMode ? this.readTestState() : await this.progressStorage.read();
     if (this.disposed) return;
     this.engine = this.makeEngine(state);
@@ -88,6 +99,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
         const added = this.engine.localChange(id, done);
         this.localDirty = true;
         if (added) this.view.completeTodo({ blockId: id, element: block, ...progressPreview(this.engine.state) });
+        else if (!done) this.view.cancelTodo(id);
       }
       if (changes.size) { this.render(); this.scheduleScan(80); }
     });
@@ -162,6 +174,28 @@ module.exports = class GamifyForSiYuan extends Plugin {
     }
   }
   saveCredentials() { localStorage.setItem(this.storeKey + ':credentials', JSON.stringify(this.credentials)); }
+  async restoreSharedConnection() {
+    if (this.testMode || (this.credentials.userId && this.credentials.token && !this.credentials.syncCredentials)) return false;
+    const shared = await new ConnectionStorage(this.name).read();
+    if (!shared) {
+      if (this.credentials.syncCredentials) { this.credentials.syncCredentials = false; this.saveCredentials(); this.view.credentials(this.credentials); }
+      return false;
+    }
+    this.credentials = { ...this.credentials, ...shared };
+    this.saveCredentials(); this.view.credentials(this.credentials);
+    return true;
+  }
+  async saveConnection(value) {
+    if (this.testMode) return;
+    const storage = new ConnectionStorage(this.name);
+    if (value.syncCredentials === true) {
+      const existing = await storage.read();
+      if (!existing || existing.userId !== value.userId || existing.token !== value.token) await storage.save(value);
+    }
+    else if (this.credentials.syncCredentials === true) await storage.clear();
+    this.credentials = { ...value, syncCredentials: value.syncCredentials === true };
+    this.saveCredentials(); this.view.credentials(this.credentials);
+  }
   async connect(value) {
     if (this.switchingMode || this.connecting) throw new Error('正在处理连接，请稍后再试');
     if (this.testMode) throw new Error('测试模式不会连接 Habitica，请先关闭测试模式');
@@ -179,8 +213,9 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.engine.state.account = value.userId;
     await this.persist();
     const habit = await client.ensureHabit(this.engine.state.alias);
-    this.client = client; this.habit = habit; this.user = user; this.credentials = value;
-    this.saveCredentials(); this.view.credentials(value); this.status = 'online'; this.message = '';
+    await this.saveConnection(value);
+    this.client = client; this.habit = habit; this.user = user;
+    this.status = 'online'; this.message = '';
     await this.resolveRewards(); this.render(); await this.flushRewards();
     } catch (error) { this.status = this.client ? 'online' : 'offline'; this.render(); throw error; }
     finally { this.connecting = false; }
@@ -258,7 +293,13 @@ module.exports = class GamifyForSiYuan extends Plugin {
     if (this.switchingMode || this.refreshing) return;
     if (this.testMode) { await this.scan(); return; }
     this.refreshing = true;
-    try { if (this.client) { this.user = await this.client.user(); await this.resolveRewards(); } else if (this.credentials.userId) await this.connect(this.credentials); await this.scan(); this.render(); }
+    try {
+      const previousAccount = this.credentials.userId, previousToken = this.credentials.token;
+      await this.restoreSharedConnection();
+      if (this.client && (previousAccount !== this.credentials.userId || previousToken !== this.credentials.token)) { this.client = null; this.user = null; }
+      if (this.client) { this.user = await this.client.user(); await this.resolveRewards(); } else if (this.credentials.userId) await this.connect(this.credentials);
+      await this.scan(); this.render();
+    }
     catch (error) { this.report(error); }
     finally { this.refreshing = false; }
   }
@@ -315,5 +356,6 @@ module.exports = class GamifyForSiYuan extends Plugin {
     if (this.dockClick) document.removeEventListener('click', this.dockClick, true);
     if (this.ws) this.eventBus.off('ws-main', this.ws);
     this.view?.destroy(); this.lockAbort?.abort(); this.releaseLock?.();
+    this.mobileTaskStyle?.remove();
   }
 };

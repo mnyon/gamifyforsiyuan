@@ -29,3 +29,22 @@ export class ProgressStorage {
     if (result.code !== 0) throw new Error(result.msg || `文件写入失败（${result.code}）`);
   }
 }
+
+// Separate from progress: opting out removes the secret from the shared file.
+export class ConnectionStorage extends ProgressStorage {
+  constructor(name, fetcher = fetch) {
+    super(name, fetcher);
+    this.path = `/data/storage/petal/${name}/connection.json`;
+  }
+  async read() {
+    const value = await super.read();
+    if (!value || value.enabled === false) return null;
+    const valid = text => typeof text === 'string' && /^[a-f0-9-]{36}$/i.test(text);
+    if (value.enabled !== true || !valid(value.userId) || !valid(value.token)) throw new Error('同步连接信息格式不正确');
+    return { userId: value.userId, token: value.token, syncCredentials: true };
+  }
+  async save(value) {
+    await this.write({ version: 1, enabled: true, userId: value.userId, token: value.token });
+  }
+  async clear() { await this.write({ version: 1, enabled: false }); }
+}

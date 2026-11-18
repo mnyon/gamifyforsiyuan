@@ -33,6 +33,10 @@ export class GamifyView {
     retry.textContent = '确认未到账，重新领取'; retry.onclick = () => onResolve(true);
     this.root.querySelector('.dashboard').append(retry);
     const form = this.root.querySelector('form');
+    const sharing = document.createElement('div'); sharing.className = 'connection-sharing';
+    sharing.innerHTML = '<label class="sound"><input name="syncCredentials" type="checkbox"> 随思源同步连接信息</label><p class="privacy">默认关闭。开启后，User ID 和 API Token 将明文保存在工作空间插件文件中，随思源数据同步；手机同步后可直接连接。</p>';
+    form.querySelector('.primary').before(sharing);
+    form.querySelector(':scope > .privacy').textContent = '凭据仅用于 Habitica，不上传笔记内容。未开启同步时仅保存在当前设备。';
     /* @test-only:start */
     const testControls = document.createElement('div'); testControls.className = 'test-settings';
     testControls.innerHTML = '<span class="eyebrow">测试构建 · 仅模拟奖励</span><p class="privacy">独立模拟进度：每 3 项结算，勾选保持约 3 秒。不连接 Habitica，不修改真实奖励进度。日常使用请安装正式包。</p>';
@@ -49,7 +53,7 @@ export class GamifyView {
     /* @test-only:end */
     form.onsubmit = async event => {
       event.preventDefault(); const button = form.querySelector('.primary'); button.disabled = true; this.formStatus('正在连接……');
-      try { await onConnect({ userId: form.elements.userId.value.trim(), token: form.elements.token.value.trim(), sound: form.elements.sound.checked }); this.formStatus('连接成功'); this.settings(false); }
+      try { await onConnect({ userId: form.elements.userId.value.trim(), token: form.elements.token.value.trim(), sound: form.elements.sound.checked, syncCredentials: form.elements.syncCredentials.checked }); this.formStatus('连接成功'); this.settings(false); }
       catch (e) { this.formStatus(e.message); } finally { button.disabled = false; }
     };
     form.elements.sound.onchange = () => onSound(form.elements.sound.checked);
@@ -61,8 +65,9 @@ export class GamifyView {
   credentials(value) {
     const form = this.root.querySelector('form'); form.elements.userId.value = value.userId || ''; form.elements.token.value = value.token || '';
     form.elements.sound.checked = value.sound !== false; this.soundEnabled = value.sound !== false;
+    form.elements.syncCredentials.checked = value.syncCredentials === true;
   }
-  settings(show) { this.isSettings = show; this.root.querySelector('.settings').hidden = !show; this.root.querySelector('.dashboard').hidden = show; if (show) this.root.querySelector('input').focus(); }
+  settings(show) { this.isSettings = show; this.root.querySelector('.settings').hidden = !show; this.root.querySelector('.dashboard').hidden = show; if (show && !this.host.classList.contains('mobile')) this.root.querySelector('input').focus(); }
   open(opener) { this.opener = opener; this.card.hidden = false; if (!this.host.classList.contains('mobile')) this.root.querySelector('.close').focus(); this.unlockSound(); }
   close() { this.card.hidden = true; }
   update({ state, user, message = '', status = 'offline', backlog = 0, testMode = false }) {
@@ -180,6 +185,12 @@ export class GamifyView {
     const follow = () => { if (this.effects.has(entry)) { position(); entry.frame = requestAnimationFrame(follow); } };
     entry.frame = requestAnimationFrame(follow);
     this.later(() => { this.effects.delete(entry); cancelAnimationFrame(entry.frame); effect.remove(); }, 1350);
+  }
+  cancelTodo(blockId) {
+    for (const entry of [...this.effects]) {
+      if (entry.blockId !== blockId) continue;
+      this.effects.delete(entry); cancelAnimationFrame(entry.frame); entry.effect.remove();
+    }
   }
   rewardFeedback(gold, context = {}) {
     const known = typeof gold === 'number' && Number.isFinite(gold) && gold >= 0;

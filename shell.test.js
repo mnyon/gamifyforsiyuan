@@ -6,9 +6,10 @@ import { newProgress } from './engine.js';
 import { execFileSync } from 'node:child_process';
 execFileSync(process.execPath, ['build.mjs', '--test-mode']);
 execFileSync(process.execPath, ['build.mjs']);
-function plugin(testBuild = true) {
+function plugin(testBuild = true, extra = {}) {
  const memory = new Map();
  const context = { localStorage: { getItem: key => memory.get(key) ?? null, setItem: (key,value)=>memory.set(key,value) }, module: {exports:{}}, require: () => ({ Plugin: class { constructor() { this.kernel = { rpc: {} }; } } }), console, crypto: globalThis.crypto, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval };
+ Object.assign(context,extra);
  vm.runInNewContext(fs.readFileSync(testBuild ? 'dist/test/gamify-for-siyuan/index.js' : 'dist/gamify-for-siyuan/index.js','utf8'),context);
  const p=new context.module.exports(); p.engine={state:{alias:'demo',credits:[],pending:{},rewards:[{id:'one',status:'queued'}],total:0}};
  p.persist=async()=>{}; p.render=()=>{};p.view={feedback:()=>{},rewardFeedback:()=>{}};p.user={stats:{hp:32,gp:1}};
@@ -95,4 +96,21 @@ test('save failures retain the kernel explanation and pause scoring', async()=>{
  const p=plugin();delete p.persist;
  p.progressStorage={write:async()=>{throw new Error('disk full')}};
  await assert.rejects(p.persist(),/disk full/);assert.equal(p.storageFailed,true);
+});
+
+test('workspace connection is opt-in, reuses synced credentials, and never resaves unchanged secrets',async()=>{
+ let file=null,reads=0,writes=0;
+ const p=plugin(false,{FormData,Blob,fetch:async(url,options)=>{
+   if(url.endsWith('getFile')){reads++;return file?{ok:true,status:200,json:async()=>file}:{status:202};}
+   writes++;file=JSON.parse(await options.body.get('file').text());return {ok:true,json:async()=>({code:0})};
+ }});
+ p.name='gamify-for-siyuan';p.storeKey='shared';p.testMode=false;p.credentials={};p.view.credentials=()=>{};
+ const value={userId:'11111111-1111-4111-8111-111111111111',token:'22222222-2222-4222-8222-222222222222'};
+ await p.saveConnection(value);assert.equal(reads,0);assert.equal(writes,0);
+ await p.saveConnection({...value,syncCredentials:true});assert.equal(writes,1);
+ p.credentials={};assert.equal(await p.restoreSharedConnection(),true);assert.equal(p.credentials.userId,value.userId);
+ await p.saveConnection(p.credentials);assert.equal(writes,1);
+ await p.saveConnection(value);assert.equal(writes,2);assert.deepEqual(file,{version:1,enabled:false});
+ p.credentials={...value};const before=reads;await p.restoreSharedConnection();assert.equal(reads,before);
+ p.testMode=true;await p.saveConnection({...value,syncCredentials:true});await p.restoreSharedConnection();assert.equal(writes,2);
 });
