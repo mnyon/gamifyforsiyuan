@@ -9,6 +9,13 @@ export function newProgress() {
 
 export function targetFor(count) { return Math.max(1, Math.ceil(count / 100)); }
 
+export function progressPreview(state) {
+  const target = state.target || 1;
+  const total = state.credits.length + Object.keys(state.pending).length;
+  // Keep the current round full until it actually settles; carry surplus separately.
+  return { progress: Math.min(target, total), target, overflow: Math.max(0, total - target) };
+}
+
 // SiYuan task-list items contain a checkbox on their first markdown line.
 export function taskDone(markdown) {
   const match = String(markdown).match(/^\s*(?:[-+*]|\d+[.)])\s+\[([ xX])\]/);
@@ -16,11 +23,12 @@ export function taskDone(markdown) {
 }
 
 export class TodoProgress {
-  constructor(state = newProgress(), uid = () => crypto.randomUUID()) {
+  constructor(state = newProgress(), uid = () => crypto.randomUUID(), confirmationMs = 60000) {
     if (state.version !== 1) throw new Error('进度版本不兼容，请先升级插件');
     this.state = state;
     this.uid = uid;
     this.previous = null;
+    this.confirmationMs = confirmationMs;
   }
 
   localChange(id, done, now = Date.now()) {
@@ -50,7 +58,7 @@ export class TodoProgress {
     const completed = [];
     for (const [id, item] of Object.entries(state.pending)) {
       if (current.get(id) !== true) { delete state.pending[id]; continue; }
-      if (now - item.since >= 60000) {
+      if (now - item.since >= this.confirmationMs) {
         state.used[item.day] ||= {};
         if (state.used[item.day][id] !== 'spent' && state.used[item.day][id] !== true) {
           state.credits.push({ id, day: item.day });
@@ -66,7 +74,7 @@ export class TodoProgress {
     });
     if (this.previous) {
       for (const [id, done] of current) {
-        if (done && this.previous.get(id) === false && !state.pending[id]) {
+        if (done && this.previous.get(id) === false && !state.pending[id] && !state.credits.some(credit => credit.id === id)) {
           if (!state.used[day][id] || state.used[day][id] === 'unspent') {
             state.pending[id] = { since: now, day };
             completed.push(id);

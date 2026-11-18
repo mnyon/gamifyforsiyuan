@@ -30,6 +30,10 @@ The earlier `reader.js` time-spent reader remains isolated for future exploratio
 
 ## Development
 
+Version 0.1.3 caps each round's inline progress at its target and labels surplus completions separately; confirmed surplus carries into the next round.
+
+Enable **测试模式 (Test mode)** in the card settings without credentials. Test progress is stored separately on this device and survives restart: three completions per round, about three seconds to confirm. No Habitica API calls or real reward writes occur. The card offers simulated TODO completion and coin-effect preview buttons. Actual note checkboxes can also test inline feedback, but still edit the notes. Turning test mode off restores real progress and normal settlement; completions made in test mode are not backfilled.
+
 ```bash
 npm run build
 npm test

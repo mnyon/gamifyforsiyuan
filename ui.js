@@ -3,7 +3,7 @@ export const STAR_ICON = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true
 import { avatarLayers } from './habitica.js';
 
 export class GamifyView {
-  constructor({ css, onConnect, onSound, onRefresh, onResolve }) {
+  constructor({ css, onConnect, onSound, onRefresh, onResolve, onTestMode = async () => {}, onTestAction = async () => {} }) {
     this.host = document.createElement('div'); this.host.id = 'gamify-for-siyuan-view';
     this.root = this.host.attachShadow({ mode: 'open' });
     this.root.innerHTML = `<style>${css}</style>
@@ -32,6 +32,24 @@ export class GamifyView {
     retry.textContent = '确认未到账，重新领取'; retry.onclick = () => onResolve(true);
     this.root.querySelector('.dashboard').append(retry);
     const form = this.root.querySelector('form');
+    const testControls = document.createElement('div'); testControls.className = 'test-settings';
+    testControls.innerHTML = '<label class="sound"><input name="testMode" type="checkbox"> 测试模式</label><p class="privacy">独立模拟进度：每 3 项结算，勾选保持约 3 秒。不连接 Habitica，不修改真实奖励进度。</p>';
+    form.prepend(testControls);
+    form.elements.testMode.onchange = async () => {
+      const input = form.elements.testMode; input.disabled = true;
+      try { await onTestMode(input.checked); this.formStatus(''); this.settings(false); }
+      catch (error) { input.checked = !!this.testMode; this.formStatus(error.message); }
+      finally { input.disabled = false; }
+    };
+    const testActions = document.createElement('div'); testActions.className = 'test-actions'; testActions.hidden = true;
+    testActions.innerHTML = '<span class="eyebrow">测试模式 · 奖励均为模拟</span><div><button type="button" class="text" data-action="todo">模拟完成 TODO</button><button type="button" class="text" data-action="reward">预览金币特效</button></div>';
+    testActions.onclick = async event => {
+      const button = event.target.closest('button'); if (!button) return;
+      button.disabled = true;
+      try { await onTestAction(button.dataset.action); } catch (error) { this.feedback(error.message); }
+      finally { button.disabled = false; }
+    };
+    this.root.querySelector('.dashboard').prepend(testActions);
     form.onsubmit = async event => {
       event.preventDefault(); const button = form.querySelector('.primary'); button.disabled = true; this.formStatus('正在连接……');
       try { await onConnect({ userId: form.elements.userId.value.trim(), token: form.elements.token.value.trim(), sound: form.elements.sound.checked }); this.formStatus('连接成功'); this.settings(false); }
@@ -50,9 +68,14 @@ export class GamifyView {
   settings(show) { this.isSettings = show; this.root.querySelector('.settings').hidden = !show; this.root.querySelector('.dashboard').hidden = show; if (show) this.root.querySelector('input').focus(); }
   open(opener) { this.opener = opener; this.card.hidden = false; this.root.querySelector('.close').focus(); this.unlockSound(); }
   close() { this.card.hidden = true; }
-  update({ state, user, message = '', status = 'offline', backlog = 0 }) {
+  update({ state, user, message = '', status = 'offline', backlog = 0, testMode = false }) {
+    this.testMode = testMode;
+    this.root.querySelector('form').elements.testMode.checked = testMode;
+    this.root.querySelector('.test-actions').hidden = !testMode;
+    this.root.querySelector('.primary').disabled = testMode;
+    if (testMode) user = { profile: { name: '练习中的冒险者' }, stats: { lvl: 1, hp: 50, maxHealth: 50, gp: state.total, class: 'warrior' } };
     const text = (selector, value) => { this.root.querySelector(selector).textContent = value; };
-    const progress = state.credits.length, target = state.target;
+    const progress = Math.min(state.credits.length, state.target || 0), target = state.target;
     const pending = Object.keys(state.pending).length;
     text('.progress', progress); text('.target', target ?? '—');
     this.root.querySelector('.reward span').style.width = `${target ? Math.min(100, progress / target * 100) : 0}%`;
@@ -62,23 +85,30 @@ export class GamifyView {
     preview.style.width = `${target ? Math.min(pending, Math.max(0, target - progress)) / target * 100 : 0}%`;
     let pendingCount = this.root.querySelector('.pending-count');
     if (!pendingCount) { pendingCount = document.createElement('small'); pendingCount.className = 'pending-count'; this.root.querySelector('.fraction').append(pendingCount); }
-    pendingCount.textContent = pending ? ` +${pending}` : '';
+    const fitting = Math.min(pending, Math.max(0, (target || 0) - progress));
+    const overflow = Math.max(0, state.credits.length + pending - (target || 0));
+    pendingCount.textContent = fitting ? ` +${fitting}` : '';
     const waiting = state.rewards.filter(r => r.status !== 'sent').length;
-    text('.remaining', waiting ? `${waiting} 次奖励待领取 · 继续积累下一轮` : target ? `再完成 ${Math.max(0, target - progress)} 个 TODO，迎接下一次奖励` : '正在读取你的 TODO……');
-    text('.pending', pending ? `${pending} 项待计入 · 保持勾选 60 秒` : `未完成 ${backlog.toLocaleString()} 项 · 本轮目标固定，进度跨天保留`);
+    text('.remaining', waiting ? `${waiting} 次奖励待领取 · 继续积累下一轮` : target ? progress + fitting >= target ? '本轮已集齐，待确认后结算' : `再完成 ${Math.max(0, target - progress - fitting)} 个 TODO，迎接下一次奖励` : '正在读取你的 TODO……');
+    text('.pending', (pending ? `${pending} 项待计入 · 保持勾选 ${testMode ? 3 : 60} 秒` : testMode ? '模拟进度独立保存 · 也可勾选笔记中的 TODO 测试' : `未完成 ${backlog.toLocaleString()} 项 · 本轮目标固定，进度跨天保留`) + (overflow ? ` · 另 ${overflow} 项留待下一轮` : ''));
     text('.notice', message);
     text('.connection-label', { online: 'Habitica 已连接', offline: '尚未连接 Habitica', waiting: '奖励待领取', paused: '当前窗口仅展示', checking: '正在连接 Habitica' }[status] || status);
+    if (testMode) text('.connection-label', '测试模式 · 不发送 Habitica 请求');
     this.root.querySelector('.connection-dot').dataset.status = status;
     this.root.querySelector('.resolve').hidden = !state.rewards.some(r => ['sending', 'uncertain'].includes(r.status));
     if (this.root.querySelector('.resolve').hidden) this.root.querySelector('.retry').hidden = true;
     this.root.querySelector('.vitals').hidden = !user;
+    if (!user) {
+      text('.player-name', '冒险，从这里开始'); text('.player-meta', '连接你的 Habitica 角色');
+      this.avatarKey = null; this.root.querySelector('.avatar').innerHTML = '<span class="placeholder">✧</span>';
+    }
     if (user) {
       text('.player-name', user.profile?.name || '冒险者');
       text('.player-meta', `Lv. ${user.stats.lvl} · ${{ warrior: '战士', wizard: '法师', healer: '医者', rogue: '盗贼' }[user.stats.class] || '冒险者'}`);
       const max = user.stats.maxHealth || 50;
       text('.hp-text', `${Math.max(0, user.stats.hp).toFixed(0)} / ${max}`);
       this.root.querySelector('.hp span').style.width = `${Math.max(0, Math.min(100, user.stats.hp / max * 100))}%`;
-      text('.gold', Number(user.stats.gp || 0).toFixed(2)); text('.level', `已领取 ${state.total} 次奖励`);
+      text('.gold', Number(user.stats.gp || 0).toFixed(2)); text('.level', `${testMode ? '已模拟' : '已领取'} ${state.total} 次奖励`);
       const layers = avatarLayers(user), key = layers.join('|');
       if (key !== this.avatarKey) {
         this.avatarKey = key; const avatar = this.root.querySelector('.avatar'); avatar.replaceChildren();
@@ -125,14 +155,15 @@ export class GamifyView {
   completeTodo(context = {}) {
     if (this.effects.size >= 16) return;
     const element = this.visibleTodo(context);
-    if (!element) { this.feedback('完成了一件事', false, context.point); return; }
+    const label = '完成了一件事' + (context.target ? ` · ${Math.min(context.progress, context.target)}/${context.target}` : '') + (context.overflow ? ` · 另 ${context.overflow} 项待计入下一轮` : '');
+    if (!element) { this.feedback(label, false, context.point); return; }
     this.chime(false);
     this.root.querySelector('.announcer').textContent = '完成了一件事';
     const field = this.root.querySelector('.line-effects');
     // These overlays never become children of the editor or change note content.
     const effect = document.createElement('div'); effect.className = 'line-complete';
     effect.innerHTML = '<span class="line-sweep"></span><span class="success-mark"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="13"/><path d="m10 16 4 4 8-9"/></svg></span><span class="line-label">完成了一件事</span>';
-    if (context.target) effect.querySelector('.line-label').textContent = `完成了一件事 · ${context.progress}/${context.target}`;
+    effect.querySelector('.line-label').textContent = label;
     field.append(effect);
     const entry = { effect, element, blockId: context.blockId };
     this.effects.add(entry);
@@ -154,7 +185,7 @@ export class GamifyView {
   }
   rewardFeedback(gold, context = {}) {
     const known = typeof gold === 'number' && Number.isFinite(gold) && gold >= 0;
-    const message = known ? `获得 ${gold.toFixed(2)} 金币` : '已获得 Habitica 奖励';
+    const message = (this.testMode ? '模拟' : '') + (known ? `获得 ${gold.toFixed(2)} 金币` : '已获得 Habitica 奖励');
     this.feedback(message, true, undefined, false);
     this.root.querySelector('.toast').classList.add('coin-toast');
     const field = this.root.querySelector('.particles');
@@ -166,7 +197,7 @@ export class GamifyView {
     const dock = document.querySelector('[data-type="gamify-for-siyuancompanion"]');
     const destination = (goldNode || dock)?.getBoundingClientRect();
     const end = destination?.width ? { x: destination.left + destination.width / 2, y: destination.top + destination.height / 2 } : { x: innerWidth - 25, y: innerHeight - 60 };
-    const loot = document.createElement('div'); loot.className = 'loot-number'; loot.textContent = known ? `+${gold.toFixed(2)} 金币` : '获得奖励';
+    const loot = document.createElement('div'); loot.className = 'loot-number'; loot.textContent = (this.testMode ? '模拟 ' : '') + (known ? `+${gold.toFixed(2)} 金币` : '获得奖励');
     loot.style.cssText = `left:${Math.max(85, Math.min(innerWidth - 100, origin.x))}px;top:${origin.y - 22}px`; field.append(loot);
     this.later(() => loot.remove(), 1800);
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;

@@ -1,9 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TodoProgress, newProgress, targetFor, taskDone } from './engine.js';
+import { TodoProgress, newProgress, targetFor, taskDone, progressPreview } from './engine.js';
 
 const row = (id, done) => ({ id, markdown: `* [${done ? 'X' : ' '}] task` });
 const start = new Date(2026, 10, 18, 12).getTime();
+
+test('13 completions show a full 12-item round and preserve the surplus', () => {
+ const engine = new TodoProgress(); engine.state.target = 12;
+ const rows = Array.from({length:1200}, (_,i)=>row(String(i),false));
+ engine.observe(rows,start);
+ for(let i=0;i<13;i++) {engine.localChange(String(i),true,start+1);rows[i]=row(String(i),true);}
+ assert.deepEqual(progressPreview(engine.state),{progress:12,target:12,overflow:1});
+ engine.observe(rows,start+2);
+ engine.observe(rows,start+60001);
+ assert.equal(engine.state.rewards.length,1);assert.equal(engine.state.rewards[0].count,12);
+ assert.equal(engine.state.credits.length,1);assert.equal(engine.state.target,12);
+ assert.deepEqual(progressPreview(engine.state),{progress:1,target:12,overflow:0});
+});
+
+test('test confirmation can run quickly without changing the production default', () => {
+ const engine = new TodoProgress(newProgress(),()=> 'test',3000);
+ engine.state.target=3;engine.observe([row('a',false)],start);
+ engine.localChange('a',true,start+1);engine.observe([row('a',true)],start+3000);
+ assert.equal(engine.state.credits.length,0);
+ engine.observe([row('a',true)],start+3001);assert.equal(engine.state.credits.length,1);
+ assert.equal(new TodoProgress().confirmationMs,60000);
+});
 test('editor completion adds pending immediately and unchecking withdraws it', () => {
  const engine = new TodoProgress(); engine.state.target = 12;
  assert.equal(engine.localChange('a',true,start),true);

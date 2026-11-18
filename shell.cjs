@@ -7,9 +7,11 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.storeKey = `gamify-for-siyuan:${globalThis.siyuan?.config?.system?.workspaceDir || location.origin}`;
     try { this.credentials = JSON.parse(localStorage.getItem(this.storeKey + ':credentials') || '{}'); }
     catch { this.credentials = {}; }
+    this.testMode = localStorage.getItem(this.storeKey + ':testMode') === 'true';
     this.view = new GamifyView({ css: PLUGIN_CSS, onConnect: value => this.connect(value), onSound: value => {
       this.credentials.sound = value; this.saveCredentials(); this.view.soundEnabled = value;
-    }, onRefresh: () => this.refresh(), onResolve: retry => this.resolveRewards(retry) });
+    }, onRefresh: () => this.refresh(), onResolve: retry => this.resolveRewards(retry),
+      onTestMode: value => this.setTestMode(value), onTestAction: action => this.testAction(action) });
     this.view.credentials(this.credentials);
     this.message = ''; this.status = 'offline'; this.backlog = 0;
     this.addIcons('<symbol id="iconGamifyStar" viewBox="0 0 24 24"><path d="m12 2 2.8 6.2L22 11l-7.2 2.8L12 21l-2.8-7.2L2 11l7.2-2.8L12 2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>');
@@ -46,9 +48,9 @@ module.exports = class GamifyForSiYuan extends Plugin {
 
   async initializeWriter() {
     this.progressStorage = new ProgressStorage(this.name);
-    const state = await this.progressStorage.read();
+    const state = this.testMode ? this.readTestState() : await this.progressStorage.read();
     if (this.disposed) return;
-    this.engine = new TodoProgress(state || newProgress());
+    this.engine = this.makeEngine(state);
     this.observedClicks = new Map();
     this.localTasks = new Map();
     this.click = event => {
@@ -62,7 +64,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
     };
     document.addEventListener('click', this.click, true);
     this.taskObserver = new MutationObserver(records => {
-      if (this.disposed || this.storageFailed) return;
+      if (this.disposed || this.storageFailed || this.switchingMode) return;
       const changes = new Map();
       for (const record of records) {
         const block = record.target;
@@ -76,7 +78,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
         this.localTasks.set(id, { done, at: Date.now() });
         const added = this.engine.localChange(id, done);
         this.localDirty = true;
-        if (added) this.view.completeTodo({ blockId: id, element: block, progress: this.engine.state.credits.length + Object.keys(this.engine.state.pending).length, target: this.engine.state.target });
+        if (added) this.view.completeTodo({ blockId: id, element: block, ...progressPreview(this.engine.state) });
       }
       if (changes.size) { this.render(); this.scheduleScan(80); }
     });
@@ -85,9 +87,10 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.eventBus.on('ws-main', this.ws);
     await this.scan();
     this.timer = setInterval(() => {
-      if (Object.keys(this.engine.state.pending).length || Date.now() - (this.lastScan || 0) > 60000) this.scan();
-    }, 5000);
-    if (this.credentials.userId && this.credentials.token) await this.connect(this.credentials).catch(error => this.report(error));
+      const elapsed = Date.now() - (this.lastScan || 0);
+      if ((Object.keys(this.engine.state.pending).length && elapsed >= (this.testMode ? 1000 : 5000)) || elapsed > 60000) this.scan();
+    }, 1000);
+    if (!this.testMode && this.credentials.userId && this.credentials.token) await this.connect(this.credentials).catch(error => this.report(error));
   }
 
   async requestSiYuan(path, body) {
@@ -97,7 +100,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
   }
   scheduleScan(delay) { clearTimeout(this.scanTimer); this.scanTimer = setTimeout(() => this.scan(), delay); }
   async scan() {
-    if (this.scanning || this.disposed || !this.active || this.storageFailed) return;
+    if (this.scanning || this.switchingMode || this.disposed || !this.active || this.storageFailed) return;
     this.scanning = true;
     try {
       // Keyset pagination avoids SiYuan's default SQL result cap.
@@ -109,6 +112,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
         last = page.at(-1).id; if (!/^\d{14}-[a-z0-9]{7}$/.test(last)) throw new Error('TODO 标识不正确');
       }
       if (this.disposed) return;
+      if (this.testMode) rows.push(...(this.testRows || []));
       // The editor is current; SQL indexing may still contain the previous toggle.
       const byId = new Map(rows.map(row => [row.id, row]));
       for (const [id, local] of this.localTasks || []) {
@@ -124,6 +128,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
       }
       this.lastScan = Date.now();
       const before = JSON.stringify(this.engine.state);
+      if (this.testMode) this.engine.state.snapshot = { day: calendarDay(), backlog: 300, target: 3 };
       const result = this.engine.observe(rows); this.backlog = result.backlog;
       if (before !== JSON.stringify(this.engine.state) || this.localDirty) await this.persist();
       this.localDirty = false;
@@ -139,6 +144,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
   }
   async persist() {
     const snapshot = JSON.parse(JSON.stringify(this.engine.state));
+    if (this.testMode) { localStorage.setItem(this.storeKey + ':testProgress', JSON.stringify(snapshot)); return; }
     try { await this.progressStorage.write(snapshot); }
     catch (error) {
       this.storageFailed = true;
@@ -148,11 +154,15 @@ module.exports = class GamifyForSiYuan extends Plugin {
   }
   saveCredentials() { localStorage.setItem(this.storeKey + ':credentials', JSON.stringify(this.credentials)); }
   async connect(value) {
+    if (this.switchingMode || this.connecting) throw new Error('正在处理连接，请稍后再试');
+    if (this.testMode) throw new Error('测试模式不会连接 Habitica，请先关闭测试模式');
     if (!this.active) throw new Error('请在主窗口连接 Habitica');
     if (!this.progressStorage || this.engine.state.target === null) throw new Error(this.message || 'TODO 进度尚未初始化，请稍后重试');
     if (this.storageFailed) throw new Error(this.message || '进度保存已暂停，请重新启用插件');
     if (!/^[a-f0-9-]{36}$/i.test(value.userId) || !/^[a-f0-9-]{36}$/i.test(value.token)) throw new Error('请输入完整的 User ID 和 API Token');
     if (this.engine.state.account && this.engine.state.account !== value.userId) throw new Error('当前进度属于另一个 Habitica 账号；请先完成原账号结算');
+    this.connecting = true;
+    try {
     this.status = 'checking'; this.render();
     const client = new HabiticaClient(value), user = await client.user();
     // The alias is persistent and scoped to this SiYuan installation.
@@ -163,8 +173,18 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.client = client; this.habit = habit; this.user = user; this.credentials = value;
     this.saveCredentials(); this.view.credentials(value); this.status = 'online'; this.message = '';
     await this.resolveRewards(); this.render(); await this.flushRewards();
+    } catch (error) { this.status = this.client ? 'online' : 'offline'; this.render(); throw error; }
+    finally { this.connecting = false; }
   }
   async flushRewards() {
+    if (this.disposed || this.storageFailed || this.switchingMode) return;
+    if (this.testMode) {
+      for (const reward of this.engine.state.rewards.filter(r => r.status === 'queued')) {
+        reward.status = 'sent'; this.engine.state.total++;
+        this.view.rewardFeedback(1, { blockId: reward.sources?.at(-1) });
+      }
+      await this.persist(); this.render(); return;
+    }
     if (this.sending || !this.client || this.disposed || this.storageFailed || Date.now() < (this.retryAfter || 0)) return;
     if (this.engine.state.rewards.some(r => ['sending', 'uncertain'].includes(r.status))) return;
     this.sending = true;
@@ -202,6 +222,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
     finally { this.sending = false; }
   }
   async resolveRewards(retry = false) {
+    if (this.testMode || this.switchingMode) return;
     if (!this.client || this.resolving || this.sending) return;
     this.resolving = true;
     try {
@@ -225,19 +246,23 @@ module.exports = class GamifyForSiYuan extends Plugin {
     finally { this.resolving = false; this.render(); }
   }
   async refresh() {
+    if (this.switchingMode || this.refreshing) return;
+    if (this.testMode) { await this.scan(); return; }
+    this.refreshing = true;
     try { if (this.client) { this.user = await this.client.user(); await this.resolveRewards(); } else if (this.credentials.userId) await this.connect(this.credentials); await this.scan(); this.render(); }
     catch (error) { this.report(error); }
+    finally { this.refreshing = false; }
   }
   open(entry) {
     const light = Number(globalThis.siyuan?.config?.appearance?.mode) === 0;
     this.view.host.dataset.theme = light ? 'light' : 'dark'; this.view.open(entry);
-    if (!this.credentials.token) this.view.settings(true);
+    if (!this.testMode && !this.credentials.token) this.view.settings(true);
     this.render();
   }
   render() {
     if (!this.view || !this.engine || this.disposed) return;
     const waiting = this.engine.state.rewards.some(r => r.status !== 'sent');
-    this.view.update({ state: this.engine.state, user: this.user, backlog: this.backlog, status: !this.active ? 'paused' : waiting ? 'waiting' : this.status, message: this.message });
+    this.view.update({ state: this.engine.state, user: this.testMode ? null : this.user, backlog: this.backlog, testMode: this.testMode, status: !this.active ? 'paused' : waiting ? 'waiting' : this.status, message: this.message });
     const entry = document.querySelector(`[data-type="${this.name}companion"]`);
     if (entry) {
       const { credits, target, pending } = this.engine.state;
@@ -247,6 +272,44 @@ module.exports = class GamifyForSiYuan extends Plugin {
     }
   }
   report(error) { this.message = error.message; this.render(); }
+  readTestState() {
+    try { return JSON.parse(localStorage.getItem(this.storeKey + ':testProgress') || 'null'); } catch { return null; }
+  }
+  makeEngine(state) {
+    if (!this.testMode) return new TodoProgress(state || newProgress());
+    const fresh = state || newProgress(); fresh.target = 3;
+    fresh.snapshot = { day: calendarDay(), backlog: 300, target: 3 };
+    this.testRows = [...new Set([...Object.keys(fresh.pending), ...fresh.credits.map(c => c.id)])].filter(id => id.startsWith('test-')).map(id => ({ id, markdown: '* [X] test' }));
+    return new TodoProgress(fresh, () => crypto.randomUUID(), 3000);
+  }
+  async setTestMode(enabled) {
+    if (!this.active) throw new Error('请在主窗口切换模式');
+    if (this.scanning || this.sending || this.resolving || this.connecting || this.refreshing || this.switchingMode || !this.localTasks) throw new Error('正在处理进度，请稍后再切换');
+    if (enabled === this.testMode) return;
+    this.switchingMode = true;
+    try {
+    if (this.localDirty) await this.persist();
+    const state = enabled ? this.readTestState() : await this.progressStorage.read();
+    localStorage.setItem(this.storeKey + ':testMode', String(enabled));
+    this.testMode = enabled;
+    this.engine = this.makeEngine(state);
+    this.localTasks.clear(); this.observedClicks.clear(); this.localDirty = false;
+    this.message = ''; this.storageFailed = false;
+    this.render();
+    } finally { this.switchingMode = false; }
+    await this.scan(); this.render();
+    if (!enabled && !this.client && this.credentials.userId && this.credentials.token) await this.connect(this.credentials).catch(error => this.report(error));
+  }
+  async testAction(action) {
+    if (!this.testMode || this.switchingMode || this.disposed) return;
+    if (action === 'reward') { this.view.rewardFeedback(1); return; }
+    const id = 'test-' + crypto.randomUUID();
+    this.testRows.push({ id, markdown: '* [X] test' });
+    this.engine.localChange(id, true); this.localDirty = true;
+    this.render();
+    this.view.completeTodo({ ...progressPreview(this.engine.state) });
+    await this.scan();
+  }
   onDataChanged() {
     this.storageFailed = true;
     this.message = '收到其他设备更新的进度，自动奖励已暂停；请只保留一台主设备，并重新启用插件。';

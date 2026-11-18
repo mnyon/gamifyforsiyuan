@@ -2,15 +2,59 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { newProgress } from './engine.js';
 import { execFileSync } from 'node:child_process';
 execFileSync(process.execPath, ['build.mjs']);
 function plugin() {
- const context = { module: {exports:{}}, require: () => ({ Plugin: class { constructor() { this.kernel = { rpc: {} }; } } }), console, crypto: globalThis.crypto, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval };
+ const memory = new Map();
+ const context = { localStorage: { getItem: key => memory.get(key) ?? null, setItem: (key,value)=>memory.set(key,value) }, module: {exports:{}}, require: () => ({ Plugin: class { constructor() { this.kernel = { rpc: {} }; } } }), console, crypto: globalThis.crypto, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval };
  vm.runInNewContext(fs.readFileSync('dist/gamify-for-siyuan/index.js','utf8'),context);
  const p=new context.module.exports(); p.engine={state:{alias:'demo',credits:[],pending:{},rewards:[{id:'one',status:'queued'}],total:0}};
  p.persist=async()=>{}; p.render=()=>{};p.view={feedback:()=>{},rewardFeedback:()=>{}};p.user={stats:{hp:32,gp:1}};
  return p;
 }
+
+test('test mode never calls Habitica, even with a previously connected client', async()=>{
+ const p=plugin();p.testMode=true;let network=0,feedback=0,scans=0;
+ p.client=new Proxy({}, {get:()=>async()=>{network++;throw new Error('unexpected network')}});
+ p.view.rewardFeedback=gold=>{feedback++;assert.equal(gold,1)};
+ p.scan=async()=>{scans++};
+ await p.flushRewards();await p.resolveRewards(true);await p.refresh();
+ await assert.rejects(p.connect({}),/测试模式/);
+ await p.testAction('reward');
+ assert.equal(network,0);assert.equal(feedback,2);assert.equal(scans,1);
+ assert.equal(p.engine.state.total,1);assert.equal(p.engine.state.rewards[0].status,'sent');
+});
+
+test('test persistence writes only isolated local storage', async()=>{
+ const p=plugin();p.testMode=true;p.storeKey='isolated';delete p.persist;
+ let writes=0;p.progressStorage={write:async()=>{writes++}};
+ await p.persist();assert.equal(writes,0);
+ assert.equal(p.readTestState().rewards[0].id,'one');
+ p.testMode=false;await p.persist();assert.equal(writes,1);
+});
+
+test('mode switches reject while real API work is running',async()=>{
+ const p=plugin();p.active=true;p.refreshing=true;
+ await assert.rejects(p.setTestMode(true),/正在处理/);assert.notEqual(p.testMode,true);
+ p.refreshing=false;p.connecting=true;
+ await assert.rejects(p.setTestMode(true),/正在处理/);
+});
+
+test('switching test mode preserves and restores real progress independently', async()=>{
+ const p=plugin();p.active=true;p.testMode=false;p.credentials={};p.storeKey='mode-round-trip';
+ p.localTasks=new Map();p.observedClicks=new Map();p.scan=async()=>{};
+ const real=newProgress();real.target=12;real.credits=[{id:'real-item',day:'2026-11-18'}];
+ p.engine=p.makeEngine(structuredClone(real));
+ let realWrites=0;p.progressStorage={read:async()=>structuredClone(real),write:async()=>{realWrites++}};
+ delete p.persist;
+ await p.setTestMode(true);assert.equal(p.engine.state.target,3);
+ p.engine.localChange('test-item',true);await p.persist();
+ await p.setTestMode(false);
+ assert.equal(JSON.stringify(p.engine.state),JSON.stringify(real));assert.equal(realWrites,0);
+ await p.setTestMode(true);assert.ok(p.engine.state.pending['test-item']);
+ assert.equal(p.testRows[0].id,'test-item');
+});
 test('reward is durably marked sending before the score request',async()=>{
  const p=plugin(); const events=[];p.persist=async()=>events.push(p.engine.state.rewards[0].status);
  p.client={user:async()=>({stats:{gp:1}}),task:async()=>({priority:.1,type:'habit',up:true,down:false,counterUp:0}),score:async()=>{events.push('request');return {gp:2,hp:32}}};
