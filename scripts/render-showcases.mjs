@@ -13,9 +13,10 @@ try {
   // Only public artwork is allowed; no API or account requests can leave this page.
   await page.route('**/*', route => route.request().url().startsWith('https://habitica-assets.s3.amazonaws.com/mobileApp/images/') ? route.continue() : route.abort());
   for (const [kind, title, subtitle] of [
-    ['companion', '在笔记旁查看角色', 'YOUR HABITICA CHARACTER, AT A GLANCE'],
-    ['complete', '勾选 TODO，进度即时呈现', 'COMPLETE A TASK. SEE YOUR PROGRESS.'],
-    ['reward', '领取奖励，金币跃入角色卡', 'EARN REWARDS. WATCH THE GOLD FLY.'],
+    ['companion', '笔记旁，有位同行者', 'A COMPANION, ALONGSIDE YOUR NOTES.'],
+    ['complete', '又一件小事，落定了', 'A SMALL MOMENT, WELL SPENT.'],
+    ['reward', '平凡的一刻，也会闪光', 'A LITTLE GOLD IN THE EVERYDAY.'],
+    ['writing', '思绪落笔，微光相随', 'A QUIET GLOW, WHERE THOUGHTS BEGIN.'],
   ]) {
     const light = kind === 'complete';
     await page.setContent(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><style>
@@ -32,7 +33,7 @@ try {
     <main class="note"><span class="date">TODAY / 今日计划</span><h2>把想做的事，一件件完成</h2><p class="intro">阅读、记录，以及留给自己的时间。</p>
       <div class="todo done"><span class="box">✓</span><span class="task">读完一章书，记下一个想法</span></div>
       <div class="todo" data-node-id="showcase-todo"><span class="box protyle-action--task"></span><span class="task">整理今天的阅读笔记</span></div>
-      <div class="todo"><span class="box"></span><span class="task">给明天留一份清晰的计划</span></div><div class="tag">TODO → HABITICA</div></main><div class="dock" data-type="gamify-for-siyuancompanion"></div><div class="caption">界面示例 · DEMONSTRATION</div></html>`);
+      <div class="todo"><span class="box"></span><span class="task">给明天留一份清晰的计划</span></div><div class="tag">阅读 · 记录 · 日常</div></main><div class="dock" data-type="gamify-for-siyuancompanion"></div><div class="caption">界面示例 · DEMONSTRATION</div></html>`);
     await page.evaluate(({bundle, light}) => {
       const lib = new Function('require', 'module', bundle + '\nreturn {GamifyView,PLUGIN_CSS,HABITICA_ICON};')(() => ({Plugin:class{}}), {exports:{}});
       const state = { target:12, credits:Array.from({length:6},(_,i)=>({id:String(i)})), pending:{}, rewards:[],total:8 };
@@ -44,7 +45,20 @@ try {
       window.demo={view,state,user};
     }, {bundle,light});
     await page.waitForFunction(() => [...window.demo.view.root.querySelectorAll('.avatar img')].every(img=>img.complete), {timeout:20000});
-    if (kind !== 'companion') {
+    if (kind === 'writing') {
+      await page.evaluate(() => {
+        const note = document.querySelector('.note');
+        note.innerHTML = '<span class="date">NOTES / 随手记</span><h2>留住一个刚刚出现的念头</h2><p class="intro">有些想法，在写下来的时候才慢慢清晰。</p><div class="protyle-wysiwyg" contenteditable="true" style="outline:none;font-size:17px;line-height:2.2"><p data-node-id="showcase-writing">读到这里，我忽然想到：<br>也许日常的小小积累，本身就有光。</p></div>';
+        const editor = note.querySelector('.protyle-wysiwyg'); editor.focus();
+        const text = editor.querySelector('p').lastChild;
+        const range = document.createRange(); range.setStart(text,text.length); range.collapse(true);
+        const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
+        window.demo.view.editingFeedback({blockId:'showcase-writing',progress:.83});
+      });
+      await page.waitForTimeout(950);
+      await page.evaluate(() => { if (!window.demo.view.caretFollower || window.demo.view.caretFollower.element.hidden) throw new Error('Writing showcase must display the real caret effect'); });
+      await page.evaluate(() => { const f=window.demo.view.caretFollower; if(f) cancelAnimationFrame(f.frame); for(const a of document.getAnimations())a.pause(); });
+    } else if (kind !== 'companion') {
       await page.evaluate(kind => {
         const {view,state,user}=window.demo;
         const el=document.querySelector('[data-node-id="showcase-todo"]');el.classList.add('done');el.querySelector('.box').textContent='✓';
@@ -57,8 +71,9 @@ try {
       await page.waitForTimeout(kind === 'complete' ? 300 : 480);
       await page.evaluate(()=>{for(const a of document.getAnimations())a.pause();});
     }
-    const index={companion:'01',complete:'02',reward:'03'}[kind];
+    const index={companion:'01',complete:'02',reward:'03',writing:'04'}[kind];
     await page.screenshot({path:path.join(root,`images/${index}-${kind}.png`)});
     console.log(`Rendered ${kind}`);
   }
+  fs.copyFileSync(path.join(root,'images/03-reward.png'),path.join(root,'preview.png'));
 } finally { await browser.close(); }

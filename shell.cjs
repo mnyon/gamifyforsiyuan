@@ -71,6 +71,13 @@ module.exports = class GamifyForSiYuan extends Plugin {
     const state = this.testMode ? this.readTestState() : await this.progressStorage.read();
     if (this.disposed) return;
     this.engine = this.makeEngine(state);
+    this.activity = new ActivityProgress(this.engine.state);
+    this.activity.day();
+    this.editing = new EditTracker({
+      lookup: ids => this.requestSiYuan('/api/query/sql', { stmt: `SELECT id, updated FROM blocks WHERE id IN (${ids.map(id => `'${id}'`).join(',')}) LIMIT 200` }),
+      onEdit: (edits, now) => this.recordEdits(edits, now), onError: error => this.report(error)
+    });
+    this.editing.start();
     this.observedClicks = new Map();
     this.localTasks = new Map();
     this.click = event => {
@@ -109,6 +116,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
     await this.scan();
     this.timer = setInterval(() => {
       const elapsed = Date.now() - (this.lastScan || 0);
+      this.editing?.prefetch();
       if ((Object.keys(this.engine.state.pending).length && elapsed >= (this.testMode ? 1000 : 5000)) || elapsed > 60000) this.scan();
     }, 1000);
     if (!this.testMode && this.credentials.userId && this.credentials.token) await this.connect(this.credentials).catch(error => this.report(error));
@@ -166,7 +174,13 @@ module.exports = class GamifyForSiYuan extends Plugin {
   async persist() {
     const snapshot = JSON.parse(JSON.stringify(this.engine.state));
     if (this.testMode) { localStorage.setItem(this.storeKey + ':testProgress', JSON.stringify(snapshot)); return; }
-    try { await this.progressStorage.write(snapshot); }
+    try {
+      this.saveChain = (this.saveChain || Promise.resolve()).then(() => {
+        if (this.storageFailed) throw new Error('进度保存已暂停');
+        return this.progressStorage.write(snapshot);
+      });
+      await this.saveChain;
+    }
     catch (error) {
       this.storageFailed = true;
       const detail = error?.message || error?.msg || '本地文件写入失败';
@@ -174,6 +188,25 @@ module.exports = class GamifyForSiYuan extends Plugin {
     }
   }
   saveCredentials() { localStorage.setItem(this.storeKey + ':credentials', JSON.stringify(this.credentials)); }
+  recordEdits(edits, now) {
+    if (this.disposed || this.storageFailed || !this.active) return;
+    for (const edit of edits) {
+      const result = this.activity.record(edit, now);
+      if (result.maintenance > 0 && now - (this.lastMaintenanceEffect || 0) > 1500) {
+        this.lastMaintenanceEffect = now;
+        this.view.maintainBlock({ blockId: edit.id, weight: result.weight });
+      }
+    }
+    if (edits.some(edit => edit.inserted + edit.deleted > 0)) {
+      this.view.editingFeedback({ blockId: edits.at(-1).id, progress: editingApproach(this.engine.state, now) });
+    }
+    this.view.unlockSound();
+    clearTimeout(this.activitySaveTimer);
+    this.activitySaveTimer = setTimeout(async () => {
+      try { await this.persist(); await this.flushRewards(); this.render(); }
+      catch (error) { this.report(error); }
+    }, 350);
+  }
   async restoreSharedConnection() {
     if (this.testMode || (this.credentials.userId && this.credentials.token && !this.credentials.syncCredentials)) return false;
     const shared = await new ConnectionStorage(this.name).read();
@@ -225,7 +258,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
     if (this.testMode) {
       for (const reward of this.engine.state.rewards.filter(r => r.status === 'queued')) {
         reward.status = 'sent'; this.engine.state.total++;
-        this.view.rewardFeedback(1, { blockId: reward.sources?.at(-1) });
+        this.view.rewardFeedback(1, { blockId: reward.sources?.at(-1), caret: ['editing', 'maintenance'].includes(reward.kind) });
       }
       await this.persist(); this.render(); return;
     }
@@ -253,7 +286,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
           reward.status = 'sent'; this.engine.state.total++; await this.persist();
           if (this.user) this.user.stats = { ...this.user.stats, ...stats };
           this.message = ''; this.status = 'online'; this.render();
-          this.view.rewardFeedback(reward.gold, { blockId: reward.sources?.at(-1) });
+          this.view.rewardFeedback(reward.gold, { blockId: reward.sources?.at(-1), caret: ['editing', 'maintenance'].includes(reward.kind) });
         } catch (error) {
           // A visual error or failed post-score save must never requeue a scored reward.
           if (reward.status === 'sent') throw error;
@@ -315,9 +348,8 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.view.update({ state: this.engine.state, user: this.testMode ? null : this.user, backlog: this.backlog, testMode: this.testMode, status: !this.active ? 'paused' : waiting ? 'waiting' : this.status, message: this.message });
     const entry = document.querySelector(`[data-type="${this.name}companion"]`);
     if (entry) {
-      const { credits, target, pending } = this.engine.state;
-      entry.setAttribute('aria-label', `Gamify for SiYuan · ${credits.length} / ${target ?? '—'}`);
-      entry.style.backgroundImage = target ? `linear-gradient(to right, #a8e8c9 ${Math.min(100, credits.length / target * 100)}%, #c5acf980 0 ${Math.min(100, (credits.length + Object.keys(pending).length) / target * 100)}%, transparent 0)` : '';
+      entry.setAttribute('aria-label', 'Gamify for SiYuan');
+      entry.style.backgroundImage = '';
       entry.style.backgroundSize = '100% 2px'; entry.style.backgroundPosition = 'bottom'; entry.style.backgroundRepeat = 'no-repeat';
     }
   }
@@ -350,6 +382,8 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.render();
   }
   onunload() {
+    if (this.activitySaveTimer && !this.storageFailed) this.persist().catch(() => {});
+    clearTimeout(this.activitySaveTimer); this.editing?.stop();
     this.disposed = true; clearInterval(this.timer); clearTimeout(this.scanTimer);
     this.taskObserver?.disconnect();
     if (this.click) document.removeEventListener('click', this.click, true);

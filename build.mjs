@@ -12,7 +12,7 @@ const plain = text => {
   return text.replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
 };
 const bundle = `const TEST_BUILD = ${testBuild};\nconst PLUGIN_CSS = ` + JSON.stringify(read('index.css')) + ';\n' +
-  ['icon.js', 'engine.js', 'habitica.js', 'storage.js', 'ui.js', 'shell.cjs'].map(file => plain(read(file))).join('\n');
+  ['icon.js', 'engine.js', 'activity.js', 'editing.js', 'habitica.js', 'storage.js', 'ui.js', 'shell.cjs'].map(file => plain(read(file))).join('\n');
 fs.writeFileSync(path.join(out, 'index.js'), bundle);
 for (const file of ["plugin.json", "README.md", "README.zh-CN.md", "Document.md", "icon.svg", "icon.png", "preview.png", "THIRD-PARTY-NOTICES.md", "LICENSE", "LICENSE-HABITICA.txt"]) {
   fs.copyFileSync(path.join(root, file), path.join(out, file));
@@ -36,5 +36,10 @@ for (const name of files) {
   chunks.push(local, filename, data); central.push(header, filename); offset += local.length + filename.length + data.length;
 }
 const directory = Buffer.concat(central), end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50); end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10); end.writeUInt32LE(directory.length, 12); end.writeUInt32LE(offset, 16);
-fs.writeFileSync(path.join(root, 'dist', testBuild ? 'package-test.zip' : 'package.zip'), Buffer.concat([...chunks, directory, end]));
+if (!process.argv.includes('--skip-package')) {
+  const packageSuffix = process.argv.find(arg => arg.startsWith('--package-suffix='))?.split('=')[1];
+  if (packageSuffix && !/^[a-z0-9-]+$/.test(packageSuffix)) throw new Error('Invalid package suffix');
+  const suffix = packageSuffix ? `-${packageSuffix}` : process.argv.includes('--caret-preview') ? '-caret' : '';
+  fs.writeFileSync(path.join(root, 'dist', `package${testBuild ? '-test' : ''}${suffix}.zip`), Buffer.concat([...chunks, directory, end]));
+}
 console.log(`Built ${out}`);

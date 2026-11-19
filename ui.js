@@ -2,6 +2,7 @@ import { HABITICA_ICON } from './icon.js';
 export const STAR_ICON = HABITICA_ICON;
 
 import { avatarLayers } from './habitica.js';
+import { editingApproach } from './activity.js';
 
 export class GamifyView {
   constructor({ css, onConnect, onSound, onRefresh, onResolve, onTestAction = async () => {} }) {
@@ -20,6 +21,9 @@ export class GamifyView {
         <form class="settings" hidden autocomplete="off"><span class="eyebrow">连接你的冒险</span><h2>与 Habitica 同行</h2><p>完成笔记里的小事，也让角色向前一步。</p><label>User ID<input name="userId" required spellcheck="false" autocomplete="off" placeholder="Habitica 用户 ID"></label><label>API Token<input name="token" type="password" required autocomplete="off" placeholder="Habitica API Token"></label><a href="https://habitica.com/user/settings/api" target="_blank" rel="noopener noreferrer">在 Habitica 中查看连接信息 ↗</a><label class="sound"><input name="sound" type="checkbox" checked> 完成音效<span>轻巧、短促的回应</span></label><button class="primary" type="submit">连接并保存</button><p class="privacy">凭据仅保存在当前设备；不上传笔记内容。连接时会创建一个最低难度的专用正向习惯。</p><div class="form-status" role="status"></div></form>
       </section><div class="toast" role="status" hidden>${STAR_ICON}<span></span></div><div class="particles" aria-hidden="true"></div><div class="line-effects" aria-hidden="true"></div><div class="announcer" role="status"></div>`;
     this.effects = new Set(); this.effectTimers = new Set();
+    // Rewards are discovered through feedback; do not display goals or instructions.
+    this.root.querySelector('.quest').hidden = true;
+    this.root.querySelector('.settings > p').textContent = '连接你的 Habitica 角色。';
     document.body.append(this.host); this.card = this.root.querySelector('.card');
     this.root.querySelector('.close').onclick = () => this.close();
     this.root.querySelector('.settings-toggle').onclick = () => this.settings(!this.isSettings);
@@ -71,6 +75,7 @@ export class GamifyView {
   open(opener) { this.opener = opener; this.card.hidden = false; if (!this.host.classList.contains('mobile')) this.root.querySelector('.close').focus(); this.unlockSound(); }
   close() { this.card.hidden = true; }
   update({ state, user, message = '', status = 'offline', backlog = 0, testMode = false }) {
+    this.editingApproach = editingApproach(state);
     this.testMode = testMode;
     /* @test-only:start */
     this.root.querySelector('.test-actions').hidden = !testMode;
@@ -158,7 +163,7 @@ export class GamifyView {
   completeTodo(context = {}) {
     if (this.effects.size >= 16) return;
     const element = this.visibleTodo(context);
-    const label = '完成了一件事' + (context.target ? ` · ${Math.min(context.progress, context.target)}/${context.target}` : '') + (context.overflow ? ` · 另 ${context.overflow} 项待计入下一轮` : '');
+    const label = '完成了一件事';
     if (!element) { this.feedback(label, false, context.point); return; }
     this.chime(false);
     this.root.querySelector('.announcer').textContent = '完成了一件事';
@@ -192,16 +197,173 @@ export class GamifyView {
       this.effects.delete(entry); cancelAnimationFrame(entry.frame); entry.effect.remove();
     }
   }
+  maintainBlock(context = {}) {
+    const point = this.caretPoint(context);
+    if (point) this.caretFeedback(point, false, context.weight);
+  }
+  editingFeedback({ blockId, progress = 0 } = {}) {
+    this.editingApproach = Math.max(0, Math.min(1, progress));
+    const point = this.caretPoint({ blockId });
+    if (!point || this.destroyed || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const follower = this.followEditingPoint(point, false);
+    const now = performance.now();
+    if (now - follower.activityAt > 2300) follower.wakeAt = now;
+    follower.activityAt = now;
+    // A pause gently fades the light; stored progress is unaffected.
+    follower.until = performance.now() + 6500;
+  }
+  caretPoint({ blockId } = {}) {
+    if (!document.hasFocus()) return null;
+    const selection = document.getSelection();
+    if (!selection?.rangeCount || !selection.isCollapsed) return null;
+    const range = selection.getRangeAt(0).cloneRange(), node = range.startContainer;
+    const element = node.nodeType === 1 ? node : node.parentElement;
+    const block = element?.closest('[data-node-id]');
+    const editor = element?.closest('.protyle-wysiwyg');
+    if (!editor || (document.activeElement !== editor && !editor.contains(document.activeElement))) return null;
+    if (!element?.closest('.protyle-wysiwyg') || element.closest('[contenteditable="false"]') ||
+        (blockId && block?.dataset.nodeId !== blockId)) return null;
+    let rect = [...range.getClientRects()].find(r => r.height > 0);
+    // Some WebViews return no rectangle for a collapsed range. Measure the
+    // adjacent character without inserting markers or changing the selection.
+    if (!rect && node.nodeType === 3 && node.length) {
+      const offset = range.startOffset, next = offset === 0;
+      range.setStart(node, next ? 0 : offset - 1);
+      range.setEnd(node, next ? 1 : offset);
+      const adjacent = [...range.getClientRects()].find(r => r.height > 0);
+      if (adjacent) rect = { left: next ? adjacent.left : adjacent.right, top: adjacent.top, height: adjacent.height };
+    }
+    if (!rect) {
+      // Empty paragraphs have no adjacent character to measure.
+      if (element.textContent?.replace(/[\s\u200b]/g, '')) return null;
+      const bounds = element.getBoundingClientRect(), style = getComputedStyle(element);
+      rect = { left: bounds.left + parseFloat(style.paddingLeft || 0), top: bounds.top + parseFloat(style.paddingTop || 0),
+        height: parseFloat(style.lineHeight) || parseFloat(style.fontSize) || 16 };
+    }
+    const x = rect.left, y = rect.top + rect.height / 2;
+    const viewport = globalThis.visualViewport;
+    const left = viewport?.offsetLeft || 0, top = viewport?.offsetTop || 0;
+    if (!Number.isFinite(x + y) || x < left || x > left + (viewport?.width || innerWidth) ||
+        y < top || y > top + (viewport?.height || innerHeight)) return null;
+    const bounds = block?.getBoundingClientRect();
+    if (bounds && (x < bounds.left - 2 || x > bounds.right + 2 || y < bounds.top || y > bounds.bottom)) return null;
+    for (let parent = block?.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+      const style = getComputedStyle(parent), bounds = parent.getBoundingClientRect();
+      if (/(auto|scroll|hidden|clip)/.test(style.overflowY) && (y < bounds.top || y > bounds.bottom)) return null;
+      if (/(auto|scroll|hidden|clip)/.test(style.overflowX) && (x < bounds.left || x > bounds.right)) return null;
+    }
+    this.caretGeometry = { height: Math.max(12, Math.min(40, rect.height)) };
+    return { x, y };
+  }
+  caretFeedback(point, gold = false, weight = 0) {
+    if (this.destroyed) return;
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) { this.stopCaretFollower(); return; }
+    const follower = this.followEditingPoint(point, gold);
+    if (!gold) follower.maintenanceUntil = performance.now() + 1300;
+    // Bound simultaneous sweeps when an offline queue delivers several rewards.
+    if (follower.element.querySelectorAll('.beam-sweep').length >= 2) return;
+    const light = document.createElement('i'); light.className = 'beam-sweep' + (gold ? '' : ' purple');
+    follower.element.append(light); this.later(() => light.remove(), 900);
+  }
+  followEditingPoint(point, gold) {
+    const now = performance.now();
+    if (this.caretFollower) {
+      this.caretFollower.until = Math.max(this.caretFollower.until, now + (gold ? 3000 : 1600));
+      if (gold) this.caretFollower.goldUntil = now + 1800;
+      return this.caretFollower;
+    }
+    const element = document.createElement('div'); element.className = 'editing-glow' + (gold ? ' gold' : '');
+    element.setAttribute('aria-hidden', 'true');
+    element.style.setProperty('--origin-x', `${point.x}px`); element.style.setProperty('--origin-y', `${point.y}px`);
+    this.root.querySelector('.particles').append(element);
+    const follower = { element, origin: point, x: point.x, y: point.y, last: now, until: now + (gold ? 3000 : 1600),
+      goldUntil: gold ? now + 1800 : 0, phase: 0, approach: this.editingApproach || 0, listeners: [], activityAt: now, wakeAt: now };
+    this.caretFollower = follower;
+    const listen = (target, name, handler) => {
+      target.addEventListener(name, handler, { capture: true, passive: true });
+      follower.listeners.push([target, name, handler]);
+    };
+    // Leave native composition rendering and selection handles untouched.
+    listen(document, 'compositionstart', () => {
+      follower.composing = true;
+      if (this.nativeCaretStyle?.sheet) this.nativeCaretStyle.sheet.disabled = true;
+      element.hidden = true;
+    });
+    listen(document, 'compositionend', () => { follower.composing = false; });
+    this.nativeCaretStyle ||= document.createElement('style');
+    this.nativeCaretStyle.textContent = '.protyle-wysiwyg:focus, .protyle-wysiwyg :focus { caret-color: transparent !important; }';
+    if (!this.nativeCaretStyle.isConnected) document.head.append(this.nativeCaretStyle);
+    this.nativeCaretStyle.sheet.disabled = true;
+    const frame = time => {
+      if (this.destroyed || this.caretFollower !== follower) return;
+      if (time >= follower.until || matchMedia('(prefers-reduced-motion: reduce)').matches) { this.stopCaretFollower(); return; }
+      const target = this.caretPoint();
+      const visible = target && !follower.composing && document.hasFocus() && document.visibilityState !== 'hidden';
+      element.hidden = !visible;
+      if (!visible) this.nativeCaretStyle.sheet.disabled = true;
+      const dt = Math.min(50, Math.max(0, time - follower.last));
+      if (visible) {
+        const distance = Math.hypot(target.x - follower.x, target.y - follower.y);
+        // Frame-rate independent easing. Large jumps snap so feedback never
+        // sweeps across unrelated panes when switching blocks or scrolling.
+        const amount = distance > 240 || time - follower.last > 150 ? 1 : 1 - Math.exp(-dt / 38);
+        follower.x += (target.x - follower.x) * amount; follower.y += (target.y - follower.y) * amount;
+        element.style.transform = `translate3d(${follower.x - follower.origin.x}px,${follower.y - follower.origin.y}px,0)`;
+        // Integrating phase keeps the breath continuous as progress changes.
+        // Easing the intensity also gives each reward a soft landing/reset.
+        follower.approach += ((this.editingApproach || 0) - follower.approach) * (1 - Math.exp(-dt / 650));
+        const progress = follower.approach;
+        const idle = Math.max(0, Math.min(1, (time - follower.activityAt - 1800) / 3000));
+        follower.phase += dt * Math.PI * 2 / (3200 - 1200 * progress + idle * 2600);
+        const breath = (1 - Math.cos(follower.phase)) / 2;
+        const afterglow = Math.max(0, Math.min(1, (follower.goldUntil - time) / 1800));
+        const warmth = Math.max(Math.max(0, (progress - .65) / .35) * .45, afterglow);
+        const purple = Math.max(0, Math.min(1, ((follower.maintenanceUntil || 0) - time) / 1300)) * (1 - afterglow);
+        const color = [181, 240, 216].map((channel, index) => {
+          const warm = channel + ([255, 227, 160][index] - channel) * warmth;
+          return Math.round(warm + ([213, 193, 255][index] - warm) * purple);
+        });
+        element.style.color = `rgb(${color.join(',')})`;
+        element.style.setProperty('--breath-scale', String(.8 + breath * (.12 + progress * .32) + afterglow * .18));
+        element.style.setProperty('--breath-opacity', String(.12 + progress * .16 + breath * (.13 + progress * .2) + afterglow * .12));
+        element.style.setProperty('--caret-height', `${this.caretGeometry?.height || 18}px`);
+        element.style.setProperty('--condense-width', `${8 - 4 * progress}px`);
+        element.style.setProperty('--condense-blur', `${5 - 2 * progress}px`);
+        const wake = Math.min(1, Math.max(0, (time - follower.wakeAt) / 650));
+        const opacity = Math.min(1, Math.max(0, (follower.until - time) / 1400)) * (.15 + .85 * wake) * (1 - idle * .35);
+        element.style.opacity = String(opacity);
+        this.nativeCaretStyle.sheet.disabled = opacity < .15;
+      }
+      follower.last = time; follower.frame = requestAnimationFrame(frame);
+    };
+    follower.frame = requestAnimationFrame(frame);
+    return follower;
+  }
+  stopCaretFollower() {
+    if (this.nativeCaretStyle?.sheet) this.nativeCaretStyle.sheet.disabled = true;
+    const follower = this.caretFollower; if (!follower) return;
+    cancelAnimationFrame(follower.frame);
+    for (const [target, name, handler] of follower.listeners) target.removeEventListener(name, handler, true);
+    follower.element.remove(); this.caretFollower = null;
+  }
   rewardFeedback(gold, context = {}) {
     const known = typeof gold === 'number' && Number.isFinite(gold) && gold >= 0;
     const message = (this.testMode ? '模拟' : '') + (known ? `获得 ${gold.toFixed(2)} 金币` : '已获得 Habitica 奖励');
-    this.feedback(message, true, undefined, false);
-    this.root.querySelector('.toast').classList.add('coin-toast');
     const field = this.root.querySelector('.particles');
     const cardRect = this.card.getBoundingClientRect();
     const source = this.visibleTodo(context)?.getBoundingClientRect();
-    const origin = source ? { x: Math.min(innerWidth - 90, source.left + Math.min(190, source.width / 2)), y: Math.max(35, source.top + Math.min(28, source.height / 2)) } :
-      this.card.hidden ? { x: innerWidth - 150, y: innerHeight - 140 } : { x: cardRect.left + cardRect.width / 2, y: cardRect.top + 145 };
+    const caret = context.caret ? this.caretPoint(context) : null;
+    const origin = caret || (source && !context.caret ? { x: Math.min(innerWidth - 90, source.left + Math.min(190, source.width / 2)), y: Math.max(35, source.top + Math.min(28, source.height / 2)) } :
+      this.card.hidden ? { x: innerWidth - 150, y: innerHeight - 140 } : { x: cardRect.left + cardRect.width / 2, y: cardRect.top + 145 });
+    // Editing and TODO rewards share the same settlement feedback. The caret
+    // also keeps its brief gold sweep; approaching a reward never calls here.
+    if (caret) {
+      this.root.querySelector('.announcer').textContent = message;
+      this.caretFeedback(caret, true);
+    }
+    this.feedback(message, true, undefined, false);
+    this.root.querySelector('.toast').classList.add('coin-toast');
     const goldNode = !this.card.hidden && !this.isSettings ? this.root.querySelector('.gold') : null;
     const dock = document.querySelector('[data-type="gamify-for-siyuancompanion"]');
     const destination = (goldNode || dock)?.getBoundingClientRect();
@@ -242,5 +404,5 @@ export class GamifyView {
     const rect = this.card.getBoundingClientRect(), x = point?.x ?? (this.card.hidden ? innerWidth - 44 : rect.left + rect.width / 2), y = point?.y ?? (this.card.hidden ? innerHeight - 70 : rect.top + 155);
     this.sparkles({ x, y }, celebrate ? 30 : 9);
   }
-  destroy() { clearTimeout(this.toastTimer); for (const timer of this.effectTimers) clearTimeout(timer); for (const entry of this.effects) cancelAnimationFrame(entry.frame); this.effects.clear(); this.audio?.close(); document.removeEventListener('pointerdown', this.outside); document.removeEventListener('keydown', this.escape); this.host.remove(); }
+  destroy() { this.destroyed = true; this.stopCaretFollower(); this.nativeCaretStyle?.remove(); clearTimeout(this.toastTimer); for (const timer of this.effectTimers) clearTimeout(timer); for (const entry of this.effects) cancelAnimationFrame(entry.frame); this.effects.clear(); this.audio?.close(); document.removeEventListener('pointerdown', this.outside); document.removeEventListener('keydown', this.escape); this.host.remove(); }
 }

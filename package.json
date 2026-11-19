@@ -1,7 +1,7 @@
 {
   "name": "gamify-for-siyuan",
-  "version": "0.1.6",
-  "description": "Complete SiYuan TODOs and earn rewards with your Habitica character.",
+  "version": "0.2.1",
+  "description": "Your Habitica companion, alongside your SiYuan notes.",
   "type": "module",
   "repository": "https://github.com/mnyon/gamifyforsiyuan",
   "scripts": {

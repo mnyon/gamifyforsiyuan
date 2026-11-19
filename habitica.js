@@ -35,7 +35,7 @@ export class HabiticaClient {
       return existing;
     }
     return this.request('/tasks/user', 'POST', { type: 'habit', text: '在思源完成任务', alias,
-      notes: '由 Gamify for SiYuan 累计 TODO 后加分。请保留琐事难度、仅正向；不要手动加分，以便核对奖励。',
+      notes: '由 Gamify for SiYuan 管理。请保留琐事难度、仅正向；不要手动加分，以便核对奖励。',
       priority: 0.1, up: true, down: false });
   }
   score(alias) { return this.request(`/tasks/${encodeURIComponent(alias)}/score/up`, 'POST'); }

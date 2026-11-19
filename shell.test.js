@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { newProgress } from './engine.js';
 import { execFileSync } from 'node:child_process';
-execFileSync(process.execPath, ['build.mjs', '--test-mode']);
-execFileSync(process.execPath, ['build.mjs']);
+execFileSync(process.execPath, ['build.mjs', '--test-mode', '--skip-package']);
+execFileSync(process.execPath, ['build.mjs', '--skip-package']);
 function plugin(testBuild = true, extra = {}) {
  const memory = new Map();
  const context = { localStorage: { getItem: key => memory.get(key) ?? null, setItem: (key,value)=>memory.set(key,value) }, module: {exports:{}}, require: () => ({ Plugin: class { constructor() { this.kernel = { rpc: {} }; } } }), console, crypto: globalThis.crypto, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval };
@@ -96,6 +96,26 @@ test('save failures retain the kernel explanation and pause scoring', async()=>{
  const p=plugin();delete p.persist;
  p.progressStorage={write:async()=>{throw new Error('disk full')}};
  await assert.rejects(p.persist(),/disk full/);assert.equal(p.storageFailed,true);
+});
+
+test('overlapping progress writes preserve snapshot order', async()=>{
+ const p=plugin();delete p.persist;p.testMode=false;
+ const writes=[];let release;
+ p.progressStorage={write:async state=>{writes.push(state.total);if(writes.length===1)await new Promise(resolve=>{release=resolve})}};
+ p.engine.state.total=1;const first=p.persist();
+ await new Promise(resolve=>setImmediate(resolve));
+ p.engine.state.total=2;const second=p.persist();
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(writes,[1]);release();await Promise.all([first,second]);
+ assert.deepEqual(writes,[1,2]);
+});
+
+test('new activity reward kinds use the existing durable Habitica queue',async()=>{
+ const p=plugin();p.engine.state.rewards=[{id:'edit',kind:'editing',status:'queued'},{id:'old',kind:'maintenance',status:'queued'}];
+ let scores=0;
+ p.client={user:async()=>({stats:{gp:scores}}),task:async()=>({priority:.1,type:'habit',up:true,down:false,counterUp:scores}),score:async()=>({gp:++scores})};
+ await p.flushRewards();assert.equal(scores,2);assert.equal(p.engine.state.total,2);
+ await p.flushRewards();assert.equal(scores,2);
 });
 
 test('workspace connection is opt-in, reuses synced credentials, and never resaves unchanged secrets',async()=>{
