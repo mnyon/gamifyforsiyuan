@@ -2,18 +2,37 @@
   "name": "gamify-for-siyuan",
   "author": "mnyon",
   "url": "https://github.com/mnyon/gamifyforsiyuan",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "icon": "icon.png",
   "preview": "preview.png",
   "minAppVersion": "3.8.5",
-  "backends": ["all"],
-  "frontends": ["desktop", "mobile", "browser-desktop", "browser-mobile", "desktop-window"],
+  "backends": [
+    "all"
+  ],
+  "frontends": [
+    "desktop",
+    "mobile",
+    "browser-desktop",
+    "browser-mobile",
+    "desktop-window"
+  ],
   "disabledInPublish": true,
-  "displayName": { "default": "Gamify for SiYuan", "zh-CN": "Gamify for SiYuan" },
+  "displayName": {
+    "default": "Gamify for SiYuan",
+    "zh-CN": "Gamify for SiYuan"
+  },
   "description": {
     "default": "Your Habitica companion, alongside your notes.",
     "zh-CN": "你的 Habitica 角色，与你的笔记同行。"
   },
-  "readme": { "default": "README.md", "zh-CN": "README.zh-CN.md" },
-  "keywords": ["Habitica", "TODO", "gamification", "productivity"]
+  "readme": {
+    "default": "README.md",
+    "zh-CN": "README.zh-CN.md"
+  },
+  "keywords": [
+    "Habitica",
+    "TODO",
+    "gamification",
+    "productivity"
+  ]
 }

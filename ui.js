@@ -1,3 +1,4 @@
+import { AdventureView } from './adventure.js';
 import { HABITICA_ICON } from './icon.js';
 export const STAR_ICON = HABITICA_ICON;
 
@@ -5,7 +6,7 @@ import { avatarLayers } from './habitica.js';
 import { editingApproach } from './activity.js';
 
 export class GamifyView {
-  constructor({ css, onConnect, onSound, onRefresh, onResolve, onTestAction = async () => {} }) {
+  constructor({ css, onConnect, onSound, onRefresh, onResolve, onTestAction = async () => {}, onAdventureLoad, onAdventureAction }) {
     this.host = document.createElement('div'); this.host.id = 'gamify-for-siyuan-view';
     this.root = this.host.attachShadow({ mode: 'open' });
     this.root.innerHTML = `<style>${css}</style>
@@ -61,6 +62,7 @@ export class GamifyView {
       catch (e) { this.formStatus(e.message); } finally { button.disabled = false; }
     };
     form.elements.sound.onchange = () => onSound(form.elements.sound.checked);
+    this.adventure = new AdventureView(this, { onLoad: onAdventureLoad, onAction: onAdventureAction });
     this.outside = event => { if (!event.composedPath().includes(this.host) && !event.target.closest?.('[data-type="gamify-for-siyuancompanion"]')) this.close(); };
     this.escape = event => { if (event.key === 'Escape' && !this.card.hidden) { this.close(); this.opener?.focus(); } };
     document.addEventListener('pointerdown', this.outside); document.addEventListener('keydown', this.escape);
@@ -73,8 +75,8 @@ export class GamifyView {
   }
   settings(show) { this.isSettings = show; this.root.querySelector('.settings').hidden = !show; this.root.querySelector('.dashboard').hidden = show; if (show && !this.host.classList.contains('mobile')) this.root.querySelector('input').focus(); }
   open(opener) { this.opener = opener; this.card.hidden = false; if (!this.host.classList.contains('mobile')) this.root.querySelector('.close').focus(); this.unlockSound(); }
-  close() { this.card.hidden = true; }
-  update({ state, user, message = '', status = 'offline', backlog = 0, testMode = false }) {
+  close() { if (this.adventure?.performing) return; this.adventure?.dismiss(true); this.card.hidden = true; }
+  update({ state, user, message = '', status = 'offline', backlog = 0, testMode = false, adventure = {} }) {
     this.editingApproach = editingApproach(state);
     this.testMode = testMode;
     /* @test-only:start */
@@ -117,18 +119,24 @@ export class GamifyView {
       text('.hp-text', `${Math.max(0, user.stats.hp).toFixed(0)} / ${max}`);
       this.root.querySelector('.hp span').style.width = `${Math.max(0, Math.min(100, user.stats.hp / max * 100))}%`;
       text('.gold', Number(user.stats.gp || 0).toFixed(2)); text('.level', `${testMode ? '已模拟' : '已领取'} ${state.total} 次奖励`);
-      const layers = avatarLayers(user), key = layers.join('|');
+      const layers = avatarLayers(user), companions = user.items || {}, key = layers.join('|') + '|' + companions.currentMount + '|' + companions.currentPet;
       if (key !== this.avatarKey) {
         this.avatarKey = key; const avatar = this.root.querySelector('.avatar'); avatar.replaceChildren();
+        const mount = /^[\w-]+$/.test(companions.currentMount || '') ? companions.currentMount : '';
+        const pet = /^[\w-]+$/.test(companions.currentPet || '') ? companions.currentPet : '';
+        avatar.classList.toggle('has-mount', !!mount); avatar.classList.toggle('has-pet', !!pet);
         const placeholder = document.createElement('span'); placeholder.className = 'placeholder'; placeholder.textContent = '✧'; avatar.append(placeholder); let loaded = 0;
-        for (const name of layers) {
+        const assets = [...(mount ? ['Mount_Body_' + mount] : []), ...layers, ...(mount ? ['Mount_Head_' + mount] : []), ...(pet ? ['Pet-' + pet] : [])];
+        for (const name of assets) {
           const img = document.createElement('img'); img.alt = ''; img.draggable = false;
+          img.className = name.startsWith('Mount_') ? 'mount-layer' : name.startsWith('Pet-') ? 'pet-layer' : 'character-layer' + (mount.includes('Kangaroo') ? ' kangaroo' : '');
           img.src = `https://habitica-assets.s3.amazonaws.com/mobileApp/images/${name}.png`;
           img.onload = () => { if (++loaded > 1) placeholder.hidden = true; };
           img.onerror = () => { img.remove(); if (loaded < 2) placeholder.title = '角色素材暂时无法加载'; }; avatar.append(img);
         }
       }
     }
+    this.adventure.update({ user, testMode, ...adventure });
   }
   async unlockSound() {
     try { const Audio = globalThis.AudioContext || globalThis.webkitAudioContext; if (Audio) { this.audio ||= new Audio(); if (this.audio.state === 'suspended') await this.audio.resume(); } } catch { /* Audio is optional. */ }
@@ -404,5 +412,5 @@ export class GamifyView {
     const rect = this.card.getBoundingClientRect(), x = point?.x ?? (this.card.hidden ? innerWidth - 44 : rect.left + rect.width / 2), y = point?.y ?? (this.card.hidden ? innerHeight - 70 : rect.top + 155);
     this.sparkles({ x, y }, celebrate ? 30 : 9);
   }
-  destroy() { this.destroyed = true; this.stopCaretFollower(); this.nativeCaretStyle?.remove(); clearTimeout(this.toastTimer); for (const timer of this.effectTimers) clearTimeout(timer); for (const entry of this.effects) cancelAnimationFrame(entry.frame); this.effects.clear(); this.audio?.close(); document.removeEventListener('pointerdown', this.outside); document.removeEventListener('keydown', this.escape); this.host.remove(); }
+  destroy() { this.adventure?.destroy(); this.destroyed = true; this.stopCaretFollower(); this.nativeCaretStyle?.remove(); clearTimeout(this.toastTimer); for (const timer of this.effectTimers) clearTimeout(timer); for (const entry of this.effects) cancelAnimationFrame(entry.frame); this.effects.clear(); this.audio?.close(); document.removeEventListener('pointerdown', this.outside); document.removeEventListener('keydown', this.escape); this.host.remove(); }
 }

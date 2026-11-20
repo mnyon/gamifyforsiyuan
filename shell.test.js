@@ -8,7 +8,7 @@ execFileSync(process.execPath, ['build.mjs', '--test-mode', '--skip-package']);
 execFileSync(process.execPath, ['build.mjs', '--skip-package']);
 function plugin(testBuild = true, extra = {}) {
  const memory = new Map();
- const context = { localStorage: { getItem: key => memory.get(key) ?? null, setItem: (key,value)=>memory.set(key,value) }, module: {exports:{}}, require: () => ({ Plugin: class { constructor() { this.kernel = { rpc: {} }; } } }), console, crypto: globalThis.crypto, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval };
+ const context = { localStorage: { getItem: key => memory.get(key) ?? null, setItem: (key,value)=>memory.set(key,value), removeItem: key=>memory.delete(key) }, module: {exports:{}}, require: () => ({ Plugin: class { constructor() { this.kernel = { rpc: {} }; } } }), console, crypto: globalThis.crypto, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval };
  Object.assign(context,extra);
  vm.runInNewContext(fs.readFileSync(testBuild ? 'dist/test/gamify-for-siyuan/index.js' : 'dist/gamify-for-siyuan/index.js','utf8'),context);
  const p=new context.module.exports(); p.engine={state:{alias:'demo',credits:[],pending:{},rewards:[{id:'one',status:'queued'}],total:0}};
@@ -133,4 +133,38 @@ test('workspace connection is opt-in, reuses synced credentials, and never resav
  await p.saveConnection(value);assert.equal(writes,2);assert.deepEqual(file,{version:1,enabled:false});
  p.credentials={...value};const before=reads;await p.restoreSharedConnection();assert.equal(reads,before);
  p.testMode=true;await p.saveConnection({...value,syncCredentials:true});await p.restoreSharedConnection();assert.equal(writes,2);
+});
+
+test('adventure task skill is rejected before mutation for every class',async()=>{
+ for(const klass of ['rogue','warrior','wizard','healer']){
+  const p=plugin(false);p.active=true;p.storeKey='guard';p.credentials={userId:'account'};p.engine.state.rewards=[];p.content={spells:{[klass]:{targeted:{key:'targeted',text:'Target',target:'task',mana:10,lvl:11}}}};
+  p.loadAdventure=async()=>{};let calls=0;p.client={user:async()=>({stats:{class:klass,lvl:90,hp:50,mp:100}}),cast:async()=>{calls++}};
+  await assert.rejects(p.adventureAction('cast','targeted'),/指定 Habitica 任务/);assert.equal(calls,0);
+ }
+});
+test('adventure mutations serialize, persist ambiguity, and cannot be replayed after a timeout',async()=>{
+ const p=plugin(false);p.active=true;p.storeKey='action';p.credentials={userId:'account'};p.engine.state.rewards=[];p.content={spells:{rogue:{stealth:{key:'stealth',text:'Stealth',target:'self',mana:45,lvl:14}}}};p.loadAdventure=async()=>{};
+ let calls=0,release;p.client={user:async()=>({stats:{class:'rogue',lvl:90,hp:50,mp:100}}),invalidateUser:()=>{},cast:async()=>{calls++;await new Promise(resolve=>{release=resolve});throw Object.assign(new Error('timeout'),{uncertain:true})}};
+ const first=p.adventureAction('cast','stealth');await new Promise(resolve=>setImmediate(resolve));await assert.rejects(p.adventureAction('cast','stealth'),/正在同步/);release();await assert.rejects(first,/不会自动重发/);assert.equal(calls,1);assert.ok(p.adventureUncertain);
+ await assert.rejects(p.adventureAction('cast','stealth'),/尚未确认/);assert.equal(calls,1);
+});
+
+test('successful armoire purchase returns the server result, refreshes inventory and is submitted once',async()=>{
+ const p=plugin(false);p.active=true;p.storeKey='purchase';p.credentials={userId:'account'};p.engine.state.rewards=[];p.content={gear:{flat:{}},armoire:{value:100,text:'宝箱'}};p.shops={market:{},gear:{},seasonal:{}};p.loadAdventure=async()=>{};
+ let mutations=0,reads=0,invalidations=0;const result={armoire:{type:'experience',value:31}};
+ p.client={user:async()=>{reads++;return {stats:{gp:200,hp:32},flags:{armoireEnabled:true},items:{}}},buy:async key=>{assert.equal(key,'armoire');mutations++;return result},invalidateUser:()=>invalidations++,invalidateShops:()=>invalidations++};
+ const returned=await p.adventureAction('buy','armoire');assert.equal(returned, result);assert.equal(mutations,1);assert.equal(reads,2);assert.equal(invalidations,2);assert.equal(p.adventureUncertain,'');assert.equal(p.adventureBusy,false);assert.equal(p.shops,null);
+});
+
+test('ambiguous purchase persists a marker and rejects further actions without a second mutation',async()=>{
+ const p=plugin(false);p.active=true;p.storeKey='ambiguous';p.credentials={userId:'account'};p.engine.state.rewards=[];p.content={gear:{flat:{}},armoire:{value:100,text:'宝箱'}};p.shops={market:{},gear:{},seasonal:{}};p.loadAdventure=async()=>{};
+ let mutations=0;p.client={user:async()=>({stats:{gp:200,hp:32},flags:{armoireEnabled:true},items:{}}),buy:async()=>{mutations++;throw Object.assign(new Error('timeout'),{uncertain:true})},invalidateUser:()=>{}};
+ await assert.rejects(p.adventureAction('buy','armoire'),/不会自动重发/);assert.ok(p.adventureUncertain);assert.equal(p.adventureBusy,false);
+ await assert.rejects(p.adventureAction('buy','armoire'),/尚未确认/);assert.equal(mutations,1);
+});
+
+test('mutating adventure requests never overlap a reward transaction or another action',async()=>{
+ const p=plugin(false);p.active=true;p.client={};p.sending=true;
+ await assert.rejects(p.adventureAction('cast','stealth'),/正在同步/);p.sending=false;p.adventureBusy=true;
+ await assert.rejects(p.adventureAction('buy','armoire'),/正在同步/);
 });

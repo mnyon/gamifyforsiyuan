@@ -12,11 +12,13 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.view = new GamifyView({ css: PLUGIN_CSS, onConnect: value => this.connect(value), onSound: value => {
       this.credentials.sound = value; this.saveCredentials(); this.view.soundEnabled = value;
     }, onRefresh: () => this.refresh(), onResolve: retry => this.resolveRewards(retry),
+      onAdventureLoad: page => this.loadAdventure(page), onAdventureAction: (kind, key) => this.adventureAction(kind, key),
       /* @test-only:start */
       onTestAction: action => this.testAction(action)
       /* @test-only:end */
     });
     this.view.credentials(this.credentials);
+    const reconcile = document.createElement('button'); reconcile.className = 'action-reconcile'; reconcile.textContent = '已在 Habitica 核对，解除操作暂停'; reconcile.hidden = true; reconcile.onclick = () => this.reconcileAdventure(); this.view.root.querySelector('.dashboard').append(reconcile); this.reconcileButton = reconcile;
     this.view.host.classList.toggle('mobile', this.isMobile);
     if (this.isMobile) {
       // SiYuan may leave its presentation class behind after unchecking on a
@@ -230,7 +232,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.saveCredentials(); this.view.credentials(this.credentials);
   }
   async connect(value) {
-    if (this.switchingMode || this.connecting) throw new Error('正在处理连接，请稍后再试');
+    if (this.switchingMode || this.connecting || this.adventureBusy) throw new Error('正在处理连接，请稍后再试');
     if (this.testMode) throw new Error('测试模式不会连接 Habitica，请先关闭测试模式');
     if (!this.active) throw new Error('请在主窗口连接 Habitica');
     if (!this.progressStorage || this.engine.state.target === null) throw new Error(this.message || 'TODO 进度尚未初始化，请稍后重试');
@@ -247,7 +249,9 @@ module.exports = class GamifyForSiYuan extends Plugin {
     await this.persist();
     const habit = await client.ensureHabit(this.engine.state.alias);
     await this.saveConnection(value);
-    this.client = client; this.habit = habit; this.user = user;
+    this.client = client; this.habit = habit; this.user = user; this.content = null; this.shops = null;
+    this.adventureUncertain = localStorage.getItem(this.storeKey + ':action:' + value.userId) || '';
+    this.client.rememberUser(user);
     this.status = 'online'; this.message = '';
     await this.resolveRewards(); this.render(); await this.flushRewards();
     } catch (error) { this.status = this.client ? 'online' : 'offline'; this.render(); throw error; }
@@ -262,7 +266,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
       }
       await this.persist(); this.render(); return;
     }
-    if (this.sending || !this.client || this.disposed || this.storageFailed || Date.now() < (this.retryAfter || 0)) return;
+    if (this.adventureBusy || this.sending || !this.client || this.disposed || this.storageFailed || Date.now() < (this.retryAfter || 0)) return;
     if (this.engine.state.rewards.some(r => ['sending', 'uncertain'].includes(r.status))) return;
     this.sending = true;
     try {
@@ -274,7 +278,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
         catch (error) { this.retryAfter = Date.now() + 60000; throw error; }
         if (task.priority !== 0.1 || task.type !== 'habit' || task.down || !task.up) throw new Error('专用习惯设置已改变，请恢复琐事难度、仅正向');
         // A fresh balance is required: the cached character may be minutes old.
-        const playerBefore = await this.client.user();
+        const playerBefore = await this.client.user({ fresh: true });
         reward.goldBefore = playerBefore.stats?.gp;
         reward.before = task.counterUp || 0;
         reward.historyBefore = (task.history || []).reduce((sum, item) => sum + (item.scoredUp || 0), 0);
@@ -284,7 +288,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
           const change = Number.isFinite(reward.goldBefore) && Number.isFinite(stats.gp) ? stats.gp - reward.goldBefore : null;
           reward.gold = change !== null && change >= 0 ? change : null;
           reward.status = 'sent'; this.engine.state.total++; await this.persist();
-          if (this.user) this.user.stats = { ...this.user.stats, ...stats };
+          if (this.user) { this.user.stats = { ...this.user.stats, ...stats }; this.client.rememberUser?.(this.user); }
           this.message = ''; this.status = 'online'; this.render();
           this.view.rewardFeedback(reward.gold, { blockId: reward.sources?.at(-1), caret: ['editing', 'maintenance'].includes(reward.kind) });
         } catch (error) {
@@ -300,7 +304,7 @@ module.exports = class GamifyForSiYuan extends Plugin {
   }
   async resolveRewards(retry = false) {
     if (this.testMode || this.switchingMode) return;
-    if (!this.client || this.resolving || this.sending) return;
+    if (!this.client || this.resolving || this.sending || this.adventureBusy) return;
     this.resolving = true;
     try {
       for (const reward of this.engine.state.rewards.filter(r => ['sending', 'uncertain'].includes(r.status))) {
@@ -323,15 +327,15 @@ module.exports = class GamifyForSiYuan extends Plugin {
     finally { this.resolving = false; this.render(); }
   }
   async refresh() {
-    if (this.switchingMode || this.refreshing) return;
+    if (this.switchingMode || this.refreshing || this.adventureBusy) return;
     if (this.testMode) { await this.scan(); return; }
     this.refreshing = true;
     try {
       const previousAccount = this.credentials.userId, previousToken = this.credentials.token;
       await this.restoreSharedConnection();
       if (this.client && (previousAccount !== this.credentials.userId || previousToken !== this.credentials.token)) { this.client = null; this.user = null; }
-      if (this.client) { this.user = await this.client.user(); await this.resolveRewards(); } else if (this.credentials.userId) await this.connect(this.credentials);
-      await this.scan(); this.render();
+      if (this.client) { this.user = await this.client.user({ refresh: true }); await this.resolveRewards(); } else if (this.credentials.userId) await this.connect(this.credentials);
+      await this.scan(); await this.loadAdventure(this.view.adventure?.page || 'home'); this.render();
     }
     catch (error) { this.report(error); }
     finally { this.refreshing = false; }
@@ -341,11 +345,13 @@ module.exports = class GamifyForSiYuan extends Plugin {
     this.view.host.dataset.theme = light ? 'light' : 'dark'; this.view.open(entry);
     if (!this.testMode && !this.credentials.token) this.view.settings(true);
     this.render();
+    if (!this.testMode && this.client) this.loadAdventure('home').catch(error => this.report(error));
   }
   render() {
     if (!this.view || !this.engine || this.disposed) return;
     const waiting = this.engine.state.rewards.some(r => r.status !== 'sent');
-    this.view.update({ state: this.engine.state, user: this.testMode ? null : this.user, backlog: this.backlog, testMode: this.testMode, status: !this.active ? 'paused' : waiting ? 'waiting' : this.status, message: this.message });
+    this.view.update({ state: this.engine.state, user: this.testMode ? null : this.user, backlog: this.backlog, testMode: this.testMode, status: !this.active ? 'paused' : waiting ? 'waiting' : this.status, message: this.message, adventure: { content: this.content, shops: this.shops, busy: !!this.adventureBusy || !!this.sending, blocked: this.adventureUncertain ? '上次操作结果尚未确认，请在 Habitica 核对后解除暂停。' : !this.active ? '请在主窗口操作' : '', updated: this.client?.cache?.get('/user')?.at || 0 } });
+    if (this.reconcileButton) { this.reconcileButton.hidden = !this.adventureUncertain; this.reconcileButton.disabled = !!this.adventureBusy || !this.active; }
     const entry = document.querySelector(`[data-type="${this.name}companion"]`);
     if (entry) {
       entry.setAttribute('aria-label', 'Gamify for SiYuan');
@@ -353,6 +359,69 @@ module.exports = class GamifyForSiYuan extends Plugin {
       entry.style.backgroundSize = '100% 2px'; entry.style.backgroundPosition = 'bottom'; entry.style.backgroundRepeat = 'no-repeat';
     }
   }
+
+  async loadAdventure(page = 'home') {
+    if (this.testMode || this.disposed || !this.client) return;
+    const client = this.client;
+    // Every page shares one user snapshot; repeated openings coalesce and reuse it.
+    const [user, content] = await Promise.all([client.user(), client.content(this.user?.preferences?.language || 'zh')]);
+    if (this.disposed || client !== this.client) return;
+    this.user = user; this.content = content;
+    if (page === 'shop') {
+      const [market, gear, seasonal] = await Promise.all([client.shop('market'), client.shop('market-gear'), client.shop('seasonal')]);
+      if (this.disposed || client !== this.client) return;
+      this.shops = { market, gear, seasonal };
+    }
+    this.render();
+  }
+  async adventureAction(kind, key) {
+    if (this.testMode) throw new Error('测试构建不执行真实购买或施放');
+    if (this.disposed || !this.active || !this.client) throw new Error('请在已连接的主窗口操作');
+    if (this.adventureBusy || this.sending || this.resolving || this.connecting || this.refreshing) throw new Error('正在同步奖励或处理请求，请稍后再试');
+    if (this.adventureUncertain) throw new Error('上次操作结果尚未确认，请先在 Habitica 核对');
+    if (!['cast', 'buy'].includes(kind)) throw new Error('不支持的操作');
+    const client = this.client, actionKey = this.storeKey + ':action:' + this.credentials.userId;
+    this.adventureBusy = true; this.render(); let submitted = false;
+    try {
+      await this.loadAdventure(kind === 'buy' ? 'shop' : 'home');
+      const user = await client.user({ fresh: true });
+      if (this.disposed || client !== this.client) throw new Error('连接已改变，请重新打开面板');
+      this.user = user;
+      if (kind === 'cast') {
+        const spell = this.content?.spells?.[user.stats?.class]?.[key];
+        if (!spell) throw new Error('当前职业没有这个技能');
+        const reason = skillBlockReason(spell, user); if (reason) throw new Error(reason);
+      } else {
+        const item = shopItems(this.shops.market, this.shops.gear, this.shops.seasonal, this.content, user).find(i => i.key === key);
+        if (!item) throw new Error('商品已变化，请重新打开商店');
+        const reason = purchaseBlockReason(item, user); if (reason) throw new Error(reason);
+      }
+      // Persist before mutation: a timeout, app close, or reload must not silently replay a purchase.
+      localStorage.setItem(actionKey, JSON.stringify({ kind, key, at: Date.now() }));
+      this.adventureUncertain = 'pending'; submitted = true;
+      const result = kind === 'cast' ? await client.cast(key) : await client.buy(key);
+      localStorage.removeItem(actionKey); this.adventureUncertain = '';
+      client.invalidateUser(); if (kind === 'buy') { client.invalidateShops(); this.shops = null; }
+      try { this.user = await client.user({ fresh: true }); this.message = ''; }
+      catch { this.message = '操作已成功，角色数据暂未刷新，请稍后刷新。'; }
+      this.render(); return result;
+    } catch (error) {
+      if (submitted && !error.uncertain && this.adventureUncertain) { localStorage.removeItem(actionKey); this.adventureUncertain = ''; }
+      if (submitted && error.uncertain) { client.invalidateUser(); this.adventureUncertain = 'uncertain'; throw new Error('操作结果尚未确认，请先在 Habitica 核对；不会自动重发。'); }
+      throw error;
+    } finally { this.adventureBusy = false; this.render(); }
+  }
+  async reconcileAdventure() {
+    if (!this.adventureUncertain || this.adventureBusy || this.testMode || !this.active || !this.client) return;
+    if (!globalThis.confirm('请先到 Habitica 核对上次购买或技能是否已生效。解除暂停不会重新发送该操作。确认已核对并解除暂停？')) return;
+    this.adventureBusy = true;
+    try {
+      this.user = await this.client.user({ fresh: true });
+      localStorage.removeItem(this.storeKey + ':action:' + this.credentials.userId); this.adventureUncertain = ''; this.client.invalidateShops(); this.shops = null; this.message = '已解除操作暂停；不会重发上次操作';
+    } catch (error) { this.report(error); }
+    finally { this.adventureBusy = false; this.render(); }
+  }
+
   report(error) { this.message = error.message; this.render(); }
   readTestState() {
     try { return JSON.parse(localStorage.getItem(this.storeKey + ':testProgress') || 'null'); } catch { return null; }
