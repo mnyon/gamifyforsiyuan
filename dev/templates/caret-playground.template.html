@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>微光 · 光标交互预览</title>
+<style>
+:root{color-scheme:dark;--bg:#171b1c;--panel:#202626;--paper:#1c2222;--text:#e2e9e5;--muted:#8a9a92;--line:#ffffff12;--mint:#b5f0d8;--accent:#b5f0d8;--soft:#ffffff05}
+[data-theme=light]{color-scheme:light;--bg:#eeefe9;--panel:#f8f9f4;--paper:#fffef9;--text:#293d34;--muted:#748078;--line:#223a241a;--mint:#427d64;--accent:#427d64;--soft:#223a2404}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.7 system-ui,"Microsoft YaHei",sans-serif;transition:background .3s,color .3s}button,input{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:4px}button{color:var(--text);border:1px solid var(--line);background:var(--soft);border-radius:9px;padding:9px 15px}button:hover{border-color:var(--mint)}button[aria-pressed=true]{background:#a8e8c91a;border-color:#a8e8c94d}main{max-width:1190px;margin:auto;padding:38px 40px 28px}.top{display:flex;justify-content:space-between;align-items:center}.brand{font-size:12px;letter-spacing:3px;color:var(--muted)}.brand b{color:var(--mint);font-size:21px;margin-right:10px}.quiet{font-size:12px;color:var(--muted)}h1{font-size:clamp(27px,3.6vw,42px);font-weight:450;letter-spacing:1px;line-height:1.4;margin:45px 0 10px}.intro{color:var(--muted);margin:0 0 32px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:22px}.paper{align-self:start;background:var(--paper);border:1px solid var(--line);border-radius:16px;min-height:450px;overflow:hidden}.paper-top{display:flex;justify-content:space-between;padding:16px 27px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:1px;color:var(--muted)}.dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--mint);margin-right:8px}.document{padding:35px 38px 24px}.doc-title{font-size:24px;line-height:1.5;font-weight:450;margin:0 0 25px}.protyle-wysiwyg{font-size:16px;line-height:2.05;min-height:245px;outline:none;caret-color:var(--mint);white-space:pre-wrap;overflow-wrap:anywhere}.protyle-wysiwyg:focus{outline:none}.paper-foot{padding:0 38px 24px;color:var(--muted);font-size:11px}.controls{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:25px 23px;align-self:start}.section-label{font-size:10px;letter-spacing:2px;color:var(--muted)}.meter-title{display:flex;align-items:baseline;justify-content:space-between;margin:15px 0 6px}.meter-title label{font-size:14px}.meter-title output{font-variant-numeric:tabular-nums;font-size:22px;color:var(--mint);font-weight:350}input[type=range]{width:100%;accent-color:var(--mint);margin:15px 0 2px;cursor:pointer}.ends{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}.caption{font-size:12px;color:var(--muted);margin:18px 0 22px}.actions{display:grid;gap:10px}.actions .primary{background:#b5f0d815;border-color:#b5f0d845;color:var(--mint)}.divider{height:1px;background:var(--line);margin:23px 0}.status{min-height:42px;font-size:12px;color:var(--muted);margin:18px 0 0}footer{display:flex;justify-content:space-between;gap:20px;color:var(--muted);font-size:11px;margin-top:25px}.legend{display:flex;gap:18px}.swatch{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:7px}.mint{background:#b5f0d8}.purple{background:#d5c1ff}.gold{background:#ffe3a0}@media(max-width:760px){main{padding:22px 18px}.layout{grid-template-columns:1fr}h1{margin-top:30px}.document{padding:25px}.paper-foot{padding:0 25px 22px}.paper{min-height:370px}.controls{padding:22px}.actions{grid-template-columns:1fr 1fr}.actions button:last-child{grid-column:1/-1}footer{flex-direction:column;gap:8px}.top .quiet{display:none}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style>
+.preview-custom-caret .protyle-wysiwyg{caret-color:transparent}.references{font-size:11px;color:var(--muted);margin-top:22px}.references summary{cursor:pointer}.references a{color:var(--mint);text-decoration:none}.references p{max-width:680px}.paper-top #current-variant{letter-spacing:0}
+</style>
+</head>
+<style>
+.effects{display:grid;gap:7px;margin:16px 0}.effect-option{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:start;padding:10px 8px;border:1px solid var(--line);border-radius:8px}.effect-option input{accent-color:var(--mint);margin-top:5px}.effect-option strong{font-size:12px;font-weight:500}.effect-option small{display:block;color:var(--muted);font-size:10px;line-height:1.6}.effect-option button{font-size:10px;padding:3px 7px}.compare-actions{display:flex;gap:8px;margin-bottom:12px}.compare-actions button{font-size:11px;flex:1;padding:6px}.effect-title{margin-top:20px;font-size:12px;color:var(--muted)}
+</style>
+<body><main>
+<div class="top"><div class="brand"><b>│</b> 微光 / CURSOR STUDY</div><div class="quiet">交互草稿 · 独立预览</div><button id="theme" aria-label="切换明暗主题">切换浅色</button></div>
+<h1>让每一次投入，轻轻发光。</h1>
+<p class="intro">在这里写几句话，或播放一段演示。先感受，再决定。</p>
+<div class="layout"><section class="paper" aria-label="书写体验区">
+<div class="paper-top"><span><i class="dot"></i>一页留给今天的笔记</span><span id="current-variant">荧光竖线</span></div>
+<div class="document"><h2 class="doc-title">缓慢，也在向前。</h2>
+<div class="protyle-wysiwyg" contenteditable="true" role="textbox" aria-label="试着在这里输入文字" aria-multiline="true" spellcheck="false"><div data-node-id="20261119000000-aaaaaaa" id="writing">不必急着完成什么。
+把刚刚浮现的念头，留在这里。
+
+光会跟随书写，也会在停顿里安静下来。
+</div></div></div>
+<div class="paper-foot" id="writing-hint">点击文字开始编辑 · 试试换行、移动光标和停顿</div></section>
+<aside class="controls" aria-label="预览控制"><div class="section-label">仅用于预览的控制</div>
+<div class="meter-title"><label for="progress">靠近下一次奖励</label><output id="percent" for="progress">35%</output></div>
+<input id="progress" type="range" min="0" max="100" value="35"><div class="ends"><span>轻柔积累</span><span>即将绽放</span></div>
+<p class="caption">呼吸会逐渐饱满，临近时浮现暖色。这个数值不会出现在正式体验中。</p>
+<div class="effect-title">逐个试试，也可以叠加</div>
+<div class="effects" id="effects"></div>
+<div class="compare-actions"><button id="baseline">只看基础版</button><button id="all-effects">开启全部</button></div>
+<div class="actions"><button class="primary" id="reward">模拟奖励到账</button><button id="maintenance">旧块维护反馈</button><button id="demo" aria-pressed="false">播放自动演示</button></div>
+<div class="divider"></div><span class="section-label">感受它的节奏</span><p class="status" id="status" role="status">拖动滑杆，看看光如何渐渐变化。</p>
+</aside></div><footer><div class="legend"><span><i class="swatch mint"></i>积累</span><span><i class="swatch purple"></i>维护</span><span><i class="swatch gold"></i>兑现</span></div><span>离线可用 · 不连接 Habitica · 不保存输入内容</span></footer>
+<details class="references"><summary>设计参考</summary><p><a href="https://github.com/microsoft/vscode/blob/main/src/vs/editor/common/config/editorOptions.ts" target="_blank" rel="noopener">VS Code：光标形状、平滑移动与淡出模式</a> · <a href="https://github.com/codemirror/view/blob/main/src/draw-selection.ts" target="_blank" rel="noopener">CodeMirror：独立光标绘制层</a> · <a href="https://github.com/QYLexpired/Neo-Plus" target="_blank" rel="noopener">Neo-Plus：平滑光标与鼠标效果</a></p><p>荧光竖线跟随文字插入位置，仅以呼吸、亮度和颜色表达积累与兑现。停顿淡出、失焦或减少动态效果时恢复原生插入符。本页不修改思源插件。</p></details>
+</main>
+<script>/* PREVIEW_RUNTIME */</script></body></html>

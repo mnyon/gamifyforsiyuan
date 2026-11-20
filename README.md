@@ -27,7 +27,7 @@ Give each surprise its moment. Equipment, food and experience from the Enchanted
 
 The character and inventory share cached data; static content is reused without frequent background polling. Screenshots use fictional account data.
 
-[Documentation](Document.md)
+[Documentation](docs/Document.md)
 
 ## Community and feedback
 
@@ -38,3 +38,5 @@ QQ group: **885445742**. Scan the QR code below to join.
 <img src="images/community-qq.jpg" alt="Gamify for SiYuan QQ user group QR code, group 885445742" width="320">
 
 Contact the author: [hucharles@foxmail.com](mailto:hucharles@foxmail.com)
+
+Development: [Repository layout and releases](https://github.com/mnyon/gamifyforsiyuan/blob/main/docs/development.md) · [Architecture](https://github.com/mnyon/gamifyforsiyuan/blob/main/docs/architecture.md).

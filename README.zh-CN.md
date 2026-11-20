@@ -27,7 +27,7 @@
 
 角色、背包共享缓存，静态内容长期复用，不进行后台高频轮询。截图为虚构账户数据。
 
-[使用说明](Document.md)
+[使用说明](docs/Document.md)
 
 ## 交流与反馈
 
@@ -38,3 +38,5 @@ QQ 群：**885445742**，也可以扫描下方二维码加入。
 <img src="images/community-qq.jpg" alt="Gamify for SiYuan QQ 用户群二维码，群号 885445742" width="320">
 
 作者邮箱：[hucharles@foxmail.com](mailto:hucharles@foxmail.com)
+
+开发与目录说明：[开发与发布](https://github.com/mnyon/gamifyforsiyuan/blob/main/docs/development.md) · [架构](https://github.com/mnyon/gamifyforsiyuan/blob/main/docs/architecture.md)。

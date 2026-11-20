@@ -5,9 +5,33 @@
   "type": "module",
   "repository": "https://github.com/mnyon/gamifyforsiyuan",
   "scripts": {
-    "build": "node build.mjs",
-    "build:test": "node build.mjs --test-mode",
-    "test": "node --test \"*.test.js\""
+    "build": "node --import tsx tools/build.ts",
+    "build:test": "node --import tsx tools/build.ts --test-mode",
+    "test": "node --import tsx --test \"tests/*.test.ts\" \"tests/territory/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run typecheck:tools && npm run typecheck:tests && npm test && npm run format:check",
+    "format": "prettier --write \"src/**/*.ts\" \"dev/**/*.ts\" \"tools/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"dev/**/*.ts\" \"tools/**/*.ts\" \"tests/**/*.ts\"",
+    "typecheck:tools": "tsc -p tsconfig.tools.json --noEmit",
+    "typecheck:tests": "tsc -p tsconfig.tests.json --noEmit",
+    "preview:build": "node --import tsx tools/build-previews.ts",
+    "preview:terrain": "node --import tsx tools/terrain-server.ts",
+    "verify:adventure": "node --import tsx tools/verify-adventure.ts",
+    "verify:activity": "node --import tsx tools/verify-activity.ts",
+    "verify:territory": "node --import tsx tools/verify-territory.ts",
+    "verify:previews": "node --import tsx tools/verify-previews.ts"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/three": "0.160.0",
+    "esbuild": "^0.28.2",
+    "playwright-core": "^1.65.1",
+    "prettier": "^3.10.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.15.0"
+  }
 }

@@ -15,7 +15,8 @@ jobs:
       - name: Check tag matches manifests
         run: |
           node --input-type=module -e 'import fs from "node:fs"; const p=JSON.parse(fs.readFileSync("plugin.json")); const n=JSON.parse(fs.readFileSync("package.json")); if (process.env.GITHUB_REF_NAME !== "v" + p.version || n.version !== p.version) process.exit(1);'
-      - run: npm test
+      - run: npm ci
+      - run: npm run check
       - run: npm run build
       - name: Create draft release with production package
         env:
