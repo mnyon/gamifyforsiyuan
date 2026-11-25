@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>笔记领地</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/controls/OrbitControls.js":"./vendor/OrbitControls.js"}}</script>
+</head>
+<body>
+  <main class="territory-shell">
+    <section class="world" id="world" aria-label="笔记领地地图">
+      <div id="scene"></div>
+      <div id="labels" aria-hidden="true"></div>
+      <div class="map-top" aria-hidden="true">
+        <span class="map-brand"><small>YOUR NOTE TERRITORY</small><strong>笔记领地</strong></span>
+        <span id="world-status">正在读取地形依据</span>
+      </div>
+      <div class="compass" aria-hidden="true">N<br>╱│╲</div>
+      <div class="map-bottom">
+        <span class="legend"><i></i>笔记地标 <i class="river"></i>跨本引用流</span>
+        <span class="map-actions"><button id="export-demo" type="button">导出 Demo 数据</button><button id="overview" type="button" aria-label="查看地图全景">全景</button></span>
+      </div>
+      <div class="collection-progress" aria-live="polite">
+        <div class="progress-line"><progress id="collection-progress" max="100" value="0"></progress><span id="collection-progress-value">准备中</span></div>
+        <div class="progress-meta"><span id="collection-progress-phase">正在准备首次整理</span><span id="collection-progress-eta">整理进度会自动保存</span></div>
+      </div>
+      <div id="load-status" class="load-status" role="status" aria-live="polite">正在建立笔记地图，关闭窗口后仍会继续整理。</div>
+      <div id="webgl-error" hidden role="alert"></div>
+    </section>
+
+    <!-- Renderer compatibility state. These nodes are intentionally not part of the UI. -->
+    <div hidden aria-hidden="true">
+      <span id="source"></span><span id="page-count"></span><span id="edge-count"></span><span id="book-count"></span>
+      <input id="search"><input id="roads" type="checkbox" checked><select id="pages"></select>
+      <button id="focus"></button><button id="demo-edit"></button><a id="open"></a>
+      <span id="route-info"></span><span id="explain-position"></span><span id="explain-density"></span>
+      <span id="explain-content"></span><span id="explain-height"></span><span id="explain-age"></span>
+      <span id="explain-active"></span><span id="explain-rule"></span><span id="title"></span>
+      <span id="book"></span><span id="chars"></span><span id="updated"></span><span id="degree"></span>
+      <span id="change-status"></span><span id="dirty-count"></span><progress id="progress"></progress>
+    </div>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -21,7 +21,6 @@ export interface AdventureSnapshot {
   busy?: boolean;
   blocked?: string;
   testMode?: boolean;
-  updated?: number;
 }
 import {
   assetURL,
@@ -59,6 +58,7 @@ export class AdventureView {
   blocked = '';
   testMode = false;
   signature = '';
+  skillSignature = '';
   products: ShopItem[] = [];
   selected?: string;
   lastFocus: Element | null = null;
@@ -108,8 +108,8 @@ export class AdventureView {
     }
     this.element = document.createElement('div');
     this.element.className = 'adventure';
-    this.element.innerHTML = `<section class="skill-section"><div class="section-label"><span>职业技能</span></div><div class="skills"></div><p class="skill-guidance">需指定任务或成员的技能，请前往 Habitica 施放。</p></section><section class="adventure-shop" hidden><button class="back">← 返回角色</button><div class="shop-top"><div><span class="eyebrow">THE TRAVELER'S GOODS</span><h2>旅人商店</h2></div><span class="shop-gold"></span></div><div class="market-panorama"><img data-src="${this.base}market_banner_npc-crop.png" alt="商人 Alex"><span class="merchant-name">◆ Alex ◆</span></div><div class="equipment-shelf"><div class="products"></div></div><p class="shop-state" role="status"></p></section><section class="adventure-bag" hidden><button class="back">← 返回角色</button><div class="bag-heading bag-heading-merged"><div class="bag-title-art">${PACK_ART}</div><div class="bag-title-copy"><span class="label">YOUR ADVENTURE KIT</span><h2>冒险背包</h2></div><span class="bag-total"></span><span class="bag-heading-star" aria-hidden="true">✧</span></div><div class="bag-tabs" role="group" aria-label="背包分类"></div><div class="bag-grid"></div><div class="bag-detail" aria-live="polite"></div><div class="bag-bottom"><span class="bag-state"></span><span>仅查看</span></div></section><p class="adventure-status" role="status"></p>`;
-    required(this.root, '.connection').before(this.element);
+    this.element.innerHTML = `<section class="skill-section"><div class="section-label"><span>职业技能</span></div><div class="skills"></div><p class="skill-guidance">需指定任务或成员的技能，暂时不支持释放。</p></section><section class="adventure-shop" hidden><button class="back">← 返回角色</button><div class="shop-top"><div><span class="eyebrow">THE TRAVELER'S GOODS</span><h2>旅人商店</h2></div><span class="shop-gold"></span></div><div class="market-panorama"><img data-src="${this.base}market_banner_npc-crop.png" alt="商人 Alex"><span class="merchant-name">◆ Alex ◆</span></div><div class="equipment-shelf"><div class="products"></div></div><p class="shop-state" role="status"></p></section><section class="adventure-bag" hidden><button class="back">← 返回角色</button><div class="bag-heading bag-heading-merged"><div class="bag-title-art">${PACK_ART}</div><div class="bag-title-copy"><span class="label">YOUR ADVENTURE KIT</span><h2>冒险背包</h2></div><span class="bag-total"></span><span class="bag-heading-star" aria-hidden="true">✧</span></div><div class="bag-tabs" role="group" aria-label="背包分类"></div><div class="bag-grid"></div><div class="bag-detail" aria-live="polite"></div></section><p class="adventure-status" role="status"></p>`;
+    required(this.root, '.vitals').after(this.element);
     this.element
       .querySelectorAll<HTMLElement>('.back')
       .forEach((b) => (b.onclick = () => this.navigate('home')));
@@ -212,7 +212,6 @@ export class AdventureView {
     busy = false,
     blocked = '',
     testMode = false,
-    updated = 0,
   }: AdventureSnapshot = {}) {
     this.user = user || null;
     this.content = content;
@@ -247,6 +246,18 @@ export class AdventureView {
       bar.setAttribute('aria-valuemin', '0');
       if (max !== null) bar.setAttribute('aria-valuemax', String(max));
     }
+    const skillSignature = JSON.stringify([
+      user.stats?.class,
+      user.stats?.lvl,
+      user.stats?.mp,
+      user.stats?.buffs?.streaks,
+      !!content,
+    ]);
+    if (skillSignature !== this.skillSignature) {
+      this.skillSignature = skillSignature;
+      this.renderSkills();
+    }
+    this.refreshSkillStates();
     const signature = JSON.stringify([
       user.stats,
       user.items,
@@ -258,27 +269,53 @@ export class AdventureView {
     ]);
     if (signature !== this.signature) {
       this.signature = signature;
-      this.renderSkills();
       this.renderShop();
       this.renderBag();
     }
-    this.text(
-      '.bag-state',
-      updated
-        ? `快照 · ${new Date(updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-        : '账户快照',
-    );
     this.text('.adventure-status', blocked);
+  }
+  skillSpells() {
+    return Object.values(this.content?.spells?.[this.user?.stats?.class || ''] || {}).filter(
+      (s): s is CatalogSkill & { key: string; lvl: number; mana: number } =>
+        typeof s.key === 'string' && typeof s.lvl === 'number' && typeof s.mana === 'number',
+    );
+  }
+  skillState(spell: CatalogSkill & { key: string; lvl: number; mana: number }) {
+    const reason = skillBlockReason(spell, this.user),
+      disabled = reason || this.blocked || (this.busy ? '正在处理，请稍候' : ''),
+      hint =
+        spell.target === 'task'
+          ? '需指定任务'
+          : !['self', 'party'].includes(spell.target || '')
+            ? '需选择目标'
+            : reason || '暂不可用';
+    return { disabled, hint };
+  }
+  refreshSkillStates() {
+    const spells = this.skillSpells();
+    for (const button of this.root.querySelectorAll<HTMLButtonElement>('[data-skill-key]')) {
+      const spell = spells.find((item) => item.key === button.dataset.skillKey);
+      if (!spell) continue;
+      const { disabled, hint } = this.skillState(spell),
+        wrapper = button.parentElement;
+      button.disabled = !!disabled;
+      button.setAttribute(
+        'aria-label',
+        `${spell.text}，${spell.mana} 法力${disabled ? '；' + disabled : ''}`,
+      );
+      if (!wrapper) continue;
+      wrapper.title = disabled || plainNotes(spell.notes);
+      const existing = wrapper.querySelector<HTMLElement>('.skill-unavailable');
+      if (disabled) {
+        if (existing) existing.textContent = hint;
+        else wrapper.append(this.node('small', 'skill-unavailable', hint));
+      } else existing?.remove();
+    }
   }
   renderSkills() {
     const list = required(this.root, '.skills');
     list.replaceChildren();
-    const spells = Object.values(
-      this.content?.spells?.[this.user?.stats?.class || ''] || {},
-    ).filter(
-      (s): s is CatalogSkill & { key: string; lvl: number; mana: number } =>
-        typeof s.key === 'string' && typeof s.lvl === 'number' && typeof s.mana === 'number',
-    );
+    const spells = this.skillSpells();
     if (!spells.length) {
       list.append(
         this.node(
@@ -291,19 +328,14 @@ export class AdventureView {
     }
     for (const spell of spells) {
       const reason = skillBlockReason(spell, this.user),
-        disabled = reason || this.blocked || (this.busy ? '正在处理，请稍候' : '');
-      const wrapper = this.node('div', 'skill-wrapper');
-      wrapper.title = disabled || plainNotes(spell.notes);
+        wrapper = this.node('div', 'skill-wrapper');
+      wrapper.title = plainNotes(spell.notes);
       const button = this.node(
         'button',
         `skill${reason === '法力不足' ? ' mana-low' : ''}${spell.key === 'frost' && this.user?.stats?.buffs?.streaks ? ' buff-active' : ''}`,
       );
       button.type = 'button';
-      button.disabled = !!disabled;
-      button.setAttribute(
-        'aria-label',
-        `${spell.text}，${spell.mana} 法力${disabled ? '；' + disabled : ''}`,
-      );
+      button.dataset.skillKey = spell.key;
       const icon = this.node('span', 'skill-icon');
       icon.append(this.image(`shop_${spell.key}`));
       icon.append(this.node('span', 'slot-glint'));
@@ -313,21 +345,10 @@ export class AdventureView {
         this.node('small', '', `${spell.mana} MP`),
       );
       wrapper.append(button);
-      if (disabled)
-        wrapper.append(
-          this.node(
-            'small',
-            'skill-unavailable',
-            spell.target === 'task'
-              ? '需指定任务'
-              : !['self', 'party'].includes(spell.target || '')
-                ? '需选择目标'
-                : reason || '暂不可用',
-          ),
-        );
       button.onclick = () => this.confirmSkill(spell);
       list.append(wrapper);
     }
+    this.refreshSkillStates();
   }
   confirmSkill(spell: CatalogSkill & { key: string; lvl: number; mana: number }) {
     this.dialog(

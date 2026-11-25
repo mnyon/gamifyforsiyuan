@@ -9,5 +9,8 @@
     "tools/**/*.ts",
     "dev/**/*.ts",
     "src/**/*.d.ts"
+  ],
+  "exclude": [
+    "dev/note-world-continuous-terrain/**"
   ]
 }

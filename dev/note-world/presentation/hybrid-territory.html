@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>笔记领地 · 连续地形试验</title>
+<script type="importmap">{"imports":{"three":"../../../dist/gamify-for-siyuan/terrain/vendor/three.module.js","three/addons/controls/OrbitControls.js":"../../../dist/gamify-for-siyuan/terrain/vendor/OrbitControls.js"}}</script>
+<style>html,body{height:100%;margin:0;overflow:hidden;background:#171326;color:#f2ebff;font:14px system-ui,"Microsoft YaHei",sans-serif}#map{width:100%;height:100%;display:block}.toolbar{position:fixed;z-index:2;left:18px;top:16px;display:flex;gap:10px;padding:10px 12px;border:1px solid #c4a9ef33;border-radius:12px;background:#1d182dcc}.toolbar strong{color:#f4d692}button,label{border:1px solid #c4a9ef44;border-radius:7px;padding:6px 10px;color:#f1e7ff;background:#342746;cursor:pointer;font:inherit}input{display:none}.help{position:fixed;right:18px;bottom:16px;color:#b8a9c9;font-size:11px}</style>
+</head>
+<body>
+<style>
+.toolbar{right:18px;width:fit-content;max-width:calc(100% - 36px);box-sizing:border-box;flex-wrap:wrap;align-items:center}
+#labels{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+.place{position:absolute;transform:translate(-50%,-100%);padding:3px 7px;background:#21232cdd;color:#f4ebd3;font-size:11px;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis}
+#selection{font:inherit;color:#f4ebd3}
+button:disabled{opacity:.55;cursor:wait}
+#stats{overflow-wrap:anywhere}
+</style>
+<div class="toolbar"><strong>笔记领地</strong><span id="stats" role="status">载入中</span><button id="refresh" type="button">从思源刷新</button><button id="sample" type="button">示例地貌</button></div>
+<canvas id="map" aria-label="笔记地形图"></canvas><div id="labels" aria-hidden="true"></div>
+<div class="help"><span style="color:#7fc6ce">●</span> 跨笔记本引用　<output id="selection" hidden></output></div>
+<script type="module" src="../../../dist/previews/note-world/hybrid-territory.js"></script>
+</body>
+</html>

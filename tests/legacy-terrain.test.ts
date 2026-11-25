@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TerrainModel, pointFor } from '../dev/LegacyTerrainModel.js';
+import { TerrainModel, pointFor } from '../dev/note-world/legacy/canvas/LegacyTerrainModel.js';
 function flush(m: TerrainModel) {
   while (m.dirty.size) m.step(111);
 }

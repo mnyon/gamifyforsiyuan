@@ -48,10 +48,6 @@ test('migrated use cases depend only on their application contracts and domain',
       'src/features/companion/application/executeAction.ts',
       'src/features/companion/application/acknowledgeAction.ts',
       'src/features/companion/application/projections.ts',
-      'src/features/territory/application/GentleSync.ts',
-      'src/features/territory/application/snapshot.ts',
-      'src/features/territory/application/updateWorld.ts',
-      'src/features/territory/application/CollectionSession.ts',
     ],
     bundle: true,
     write: false,
@@ -62,13 +58,13 @@ test('migrated use cases depend only on their application contracts and domain',
   for (const input of Object.keys(result.metafile.inputs))
     assert.match(
       input.replaceAll('\\', '/'),
-      /^src\/features\/(progress|connection|companion|territory)\/(application|domain)\//,
+      /^src\/features\/(progress|connection|companion)\/(application|domain)\//,
       input,
     );
 });
 
 test('migrated domain and application cannot reach browser or network globals', () => {
-  for (const feature of ['progress', 'connection', 'companion', 'territory'])
+  for (const feature of ['progress', 'connection', 'companion'])
     for (const layer of ['domain', 'application']) {
       const directory = 'src/features/' + feature + '/' + layer;
       for (const file of fs.readdirSync(directory)) {
@@ -89,31 +85,6 @@ test('migrated domain and application cannot reach browser or network globals', 
       }
     }
 });
-test('territory runtime is built entirely from TypeScript sources without legacy JS entries', async () => {
-  const result = await build({
-    entryPoints: [
-      'src/features/territory/presentation/main.ts',
-      'src/features/territory/cache.ts',
-      'src/features/territory/domain/WorldModel.ts',
-      'src/features/territory/adapters/SiYuanMetadataSource.ts',
-    ],
-    bundle: true,
-    write: false,
-    outdir: 'unused',
-    platform: 'browser',
-    external: ['three', 'three/addons/controls/OrbitControls.js'],
-    metafile: true,
-  });
-  for (const input of Object.keys(result.metafile.inputs))
-    assert.match(input.replaceAll('\\', '/'), /^src\/features\/territory\/.*\.ts$/, input);
-  for (const entry of ['app.js', 'world.js', 'cache.js', 'source.js'])
-    assert.equal(
-      fs.existsSync(path.join('src/features/territory/presentation', entry)),
-      false,
-      entry + ' must be compiled, not maintained as a second source',
-    );
-});
-
 test('Habitica client and companion projections contain no legacy JS dependency', async () => {
   const result = await build({
     entryPoints: [

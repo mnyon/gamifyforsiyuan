@@ -77,7 +77,7 @@ try {
         const lib = new Function('require', 'module', code + ';return GamifyPreview;')(
           () => ({ Plugin: class {} }),
           { exports: {} },
-        ) as typeof import('../dev/preview.js');
+        ) as typeof import('../dev/plugin-simulation/preview.js');
         const state = lib.newProgress();
         state.total = 14;
         let actions = 0;
@@ -85,8 +85,6 @@ try {
           css: lib.PLUGIN_CSS,
           onConnect: async () => {},
           onSound: () => {},
-          onRefresh: () => {},
-          onResolve: async () => {},
           onAdventureLoad: async () => {},
           onAdventureAction: async () => {
             actions++;
@@ -105,8 +103,7 @@ try {
         view.update({
           state,
           user,
-          status: 'online',
-          adventure: { content, shops, updated: Date.now() },
+          adventure: { content, shops },
         });
         view.open();
         if (!mobile) view.card.style.cssText = 'right:65px;top:25px;bottom:auto;max-height:1000px';
@@ -137,7 +134,6 @@ try {
         demo.view.update({
           state: demo.state,
           user: demo.user,
-          status: 'online',
           adventure: { content: demo.content, shops: demo.shops },
         });
         return [...demo.view.root.querySelectorAll<HTMLButtonElement>('.skill')].map((b) => ({
@@ -158,7 +154,6 @@ try {
       demo.view.update({
         state: demo.state,
         user: demo.user,
-        status: 'online',
         adventure: { content: demo.content, shops: demo.shops },
       });
       (demo.view.root.activeElement as HTMLElement | null)?.blur();

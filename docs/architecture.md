@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-自有运行时、测试、构建和开发工具已统一为 TypeScript，启用 strict，关闭 allowJs。领域和应用层按功能划分，浏览器与思源、Habitica 的实现位于适配器或展示层。第三方 Three.js / OrbitControls 保留原厂 JavaScript；安装包和独立 HTML 中的 JavaScript 由构建生成。
+自有运行时、测试、构建和开发工具已统一为 TypeScript，启用 strict，关闭 allowJs。领域和应用层按功能划分，浏览器与思源、Habitica 的实现位于适配器或展示层。安装包和独立 HTML 中的 JavaScript 由构建生成。
 
 ```text
 src/
@@ -20,11 +20,6 @@ src/
     domain/           # 凭据类型与格式规则
     application/      # 本机与共享连接的恢复、保存、同步选择
     adapters/         # 本机偏好、思源连接文件、格式校验
-  features/territory/
-    domain/           # 元信息地形、稳定布局、引用流与寻路
-    application/      # 分批收集、断点、快照、增量计算与会话调度
-    adapters/         # IndexedDB、思源查询、可见性与读取锁
-    presentation/     # Three.js 场景、网格、地图标签、交互和页面装配
   adapters/
     habitica/         # HTTP 客户端、缓存、限流、所用响应字段校验
     siyuan/           # JSON 文件传输、TODO/更新时间查询、外部时间统计读取
@@ -33,11 +28,9 @@ src/
     main.ts           # 思源组合根、生命周期、主写窗口、操作互斥
     siyuan.d.ts       # 仅声明实际使用的宿主接口
     styles.ts         # 样式资源入口
-dev/                  # 模拟插件、浏览器验证导出、历史预览与模板
+dev/                  # 按 Feature 组织的模拟插件、Note World、历史预览与模板
 tools/                # 构建、开发服务、浏览器验证、示意图生成
 tests/                # 单元、集成、架构测试与虚构数据
-  territory/          # 元信息地图测试
-third_party/three/    # 固定版本的 Three.js、OrbitControls 与许可证
 dist/                 # 生成的安装包、离线预览与调试文件（不提交）
 ```
 
@@ -58,15 +51,15 @@ progress.json 保持 version 1、原有字段与奖励规则。奖励收据允�
 
 发奖前先保存 sending 状态与计数收据；保存失败不得加分。结果不确定时保留暂停；成功后的保存或视觉反馈失败不能把奖励改回 queued。核对使用累计历史证据；缺少证据不表示未到账，重试保留人工确认和等待时间。
 
+奖励与连接的核对历史写入 `data/storage/petal/gamify-for-siyuan/reward-audit.json`（最近 200 条，不含 User ID、Token 或笔记正文）。后台补齐队列按 1/2/5/10 分钟退避重连；凭据被拒绝后停止自动重连，等待用户重新连接。
+
 ProgressWriter 在调用时复制状态，按顺序保存。保存失败或其他设备进度变更会停止排队写入；已发出的请求无法撤回。这不是跨设备事务或并发合并机制。
 
 购买与施法在提交前读取新账户快照，重新检查余额、等级、生命、法力、持有状态及目录资格。操作标记沿用 `工作空间:action:账号` 与 `{kind,key,at}`；任何无法解析的非空标记仍暂停，不自动清除或重发。成功但清除标记失败仍保持暂停。人工解除暂停只读账户并清除标记，不重复执行。
 
 连接同步由用户主动选择。关闭同步先写原有禁用标记，再保存本机偏好；共享保存失败不更新本机。共享文件和本机存储不是原子事务。
 
-地图保持 IndexedDB 存储键、snapshot v1 / generator 4、布局 v4 与坐标稳定机制。完整采样可直接恢复；缺失、错误长度或非有限值会重建。完整收集并成功保存前保留旧地图；快照写入成功后才清除断点。关闭页面使迟到结果失效，不再应用地图或安排后续批次。已发出的只读请求与保存不能撤回。地形计算仍在主线程分批执行，尚未引入 Worker。
-
-思源查询与 Habitica 响应在进入业务状态前校验实际使用字段。TypeScript 不代替运行时校验；地图缓存仍按现有兼容范围验收，不宣称所有扩展字段都有完整 schema。
+思源查询与 Habitica 响应在进入业务状态前校验实际使用字段。TypeScript 不代替运行时校验，不宣称所有扩展字段都有完整 schema。
 
 ## 构建与验证
 
@@ -77,20 +70,18 @@ npm run check              # strict 运行时 + 工具 + 测试、全部测试�
 npm run build              # dist/package.zip
 npm run build:test         # dist/package-test.zip
 npm run preview:build      # 重建光标和历史地形的独立 HTML
-npm run preview:terrain    # 本机只读地图预览服务，默认 4177
 npm run verify:activity    # 桌面/手机输入、IME、光标、金币与清理
 npm run verify:adventure   # 桌面/手机技能、背包、商店、宝箱
-npm run verify:territory   # 虚构地图交互、缓存、插件路径和关闭清理
 npm run verify:previews    # 两个独立 HTML 的离线交互
 ```
 
 check 分别使用 tsconfig.json、tsconfig.tools.json、tsconfig.tests.json，全部继承 strict。测试中的损坏 JSON 通过 unknown 或显式 invalidFixture 输入，不用 any、ts-ignore 或 ts-nocheck 隐藏错误；局部宿主替身只实现该场景实际使用的接口。
 
-构建通过 esbuild 的显式模块图打包，仅 siyuan 由宿主提供，CSS 作为文本资源。正式入口为 src/plugin/main.ts；模拟入口为 dev/TestPlugin.ts，继承宿主装配并提供 TestGamifyView 和模拟动作。构建保持思源要求的 CommonJS 类导出。
+构建通过 esbuild 的显式模块图打包，仅 siyuan 由宿主提供，CSS 作为文本资源。正式入口为 src/plugin/main.ts；模拟入口为 dev/plugin-simulation/TestPlugin.ts，继承宿主装配并提供 TestGamifyView 和模拟动作。构建保持思源要求的 CommonJS 类导出。
 
-浏览器验证依赖 Chrome 和 Playwright，可用 GAMIFY_RENDER_NODE_MODULES 指向已有依赖目录；playwright-core 提供浏览器自动化接口与类型。验证使用虚构账户，不请求真实 Habitica 账户接口。地图验证使用独立端口和隔离缓存。
+浏览器验证依赖 Chrome 和 Playwright，可用 GAMIFY_RENDER_NODE_MODULES 指向已有依赖目录；playwright-core 提供浏览器自动化接口与类型。验证使用虚构账户，不请求真实 Habitica 账户接口。
 
-dev/templates/caret-playground.template.html 与 dev/templates/page-terrain.template.html 只维护 HTML/CSS；对应 TypeScript 位于 dev。执行 preview:build 后可直接打开 dist/previews/ 中的 HTML。不要手改生成文件。
+光标实验的 HTML 模板和 TypeScript 位于 dev/caret-playground/，早期 Canvas 地图位于 dev/note-world/legacy/canvas/。执行 preview:build 后可直接打开 dist/previews/ 中的离线预览。当前 Note World 地图和素材画廊的入口位于 dev/note-world/presentation/。不要手改生成文件。
 
 ## 验证范围
 

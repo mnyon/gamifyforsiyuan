@@ -12,7 +12,9 @@ fs.mkdirSync(out, { recursive: true });
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const { build } = await import('esbuild');
 await build({
-  entryPoints: [path.join(root, testBuild ? 'dev/TestPlugin.ts' : 'src/plugin/main.ts')],
+  entryPoints: [
+    path.join(root, testBuild ? 'dev/plugin-simulation/TestPlugin.ts' : 'src/plugin/main.ts'),
+  ],
   outfile: path.join(out, 'index.js'),
   bundle: true,
   platform: 'browser',
@@ -24,7 +26,7 @@ await build({
   define: { TEST_BUILD: String(testBuild) },
 });
 await build({
-  entryPoints: [path.join(root, 'dev/preview.ts')],
+  entryPoints: [path.join(root, 'dev/plugin-simulation/preview.ts')],
   outfile: path.join(root, 'dist/dev/preview.js'),
   bundle: true,
   platform: 'browser',
@@ -62,45 +64,6 @@ fs.writeFileSync(
   path.join(out, 'index.css'),
   '/* Component styles are isolated in Shadow DOM. */\n',
 );
-const terrainFiles = [
-  'index.html',
-  'style.css',
-  'app.js',
-  'world.js',
-  'cache.js',
-  'source.js',
-  'vendor/three.module.js',
-  'vendor/OrbitControls.js',
-  'vendor/THREE-LICENSE.txt',
-];
-for (const file of terrainFiles) {
-  const destination = path.join(out, 'terrain', file);
-  fs.mkdirSync(path.dirname(destination), { recursive: true });
-  if (!['app.js', 'world.js', 'cache.js', 'source.js'].includes(file))
-    fs.copyFileSync(
-      file.startsWith('vendor/')
-        ? path.join(root, 'third_party/three', file.slice(7))
-        : path.join(root, 'src/features/territory/presentation', file),
-      destination,
-    );
-}
-// Compile the typed terrain model and collector while keeping browser-relative entry names.
-await build({
-  entryPoints: Object.fromEntries(
-    Object.entries({
-      app: 'presentation/main.ts',
-      world: 'domain/WorldModel.ts',
-      cache: 'cache.ts',
-      source: 'adapters/SiYuanMetadataSource.ts',
-    }).map(([name, file]) => [name, path.join(root, 'src/features/territory', file)]),
-  ),
-  external: ['three', 'three/addons/controls/OrbitControls.js'],
-  outdir: path.join(out, 'terrain'),
-  bundle: true,
-  platform: 'browser',
-  format: 'esm',
-  target: 'es2022',
-});
 // Store entries without compression; no additional ZIP dependency is required.
 const files = [
   'index.js',
@@ -118,7 +81,6 @@ const files = [
   ...fs.readdirSync(path.join(out, 'images')).map((name) => 'images/' + name),
   ...fs.readdirSync(path.join(out, 'assets')).map((name) => 'assets/' + name),
 ];
-files.push(...terrainFiles.map((file) => 'terrain/' + file));
 let offset = 0;
 const chunks = [],
   central = [];

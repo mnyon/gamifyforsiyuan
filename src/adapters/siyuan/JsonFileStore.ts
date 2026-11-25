@@ -12,7 +12,7 @@ export class JsonFileStore {
   readonly path: string;
   constructor(
     name: string,
-    readonly filename: 'progress.json' | 'connection.json',
+    readonly filename: 'progress.json' | 'connection.json' | 'reward-audit.json',
     public fetcher: FileFetcher = fetch,
   ) {
     if (!/^[a-z0-9-]+$/i.test(name)) throw new Error('插件存储名称不正确');

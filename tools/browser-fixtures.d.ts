@@ -8,8 +8,6 @@ import type {
   adventureUser,
   adventureShops,
 } from '../tests/fixtures/adventure-fixture.js';
-import type { TerritoryPage } from '../src/features/territory/presentation/TerritoryPage.js';
-import type { snapshotOf } from '../src/features/territory/application/snapshot.js';
 declare global {
   var demo: {
     view: GamifyView;
@@ -31,14 +29,4 @@ declare global {
   var totals: () => { inserted: number; deleted: number; maintenance: number };
   var imeEvents: unknown[];
   var followerBeforeDestroy: CaretFollower;
-  var terrainAtlas: {
-    model: TerritoryPage['view']['model'];
-    real: boolean;
-    busy: boolean;
-    select: TerritoryPage['view']['selectPage'];
-    sync(): Promise<void>;
-    exportCache: typeof snapshotOf extends (...args: never[]) => infer R ? () => R : never;
-    cache: TerritoryPage['cache'];
-    diagnostics: TerritoryPage['view']['diagnostics'];
-  };
 }

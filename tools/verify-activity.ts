@@ -32,7 +32,7 @@ try {
         const lib = new Function('require', 'module', code + '\nreturn GamifyPreview;')(
           () => ({ Plugin: class {} }),
           { exports: {} },
-        ) as typeof import('../dev/preview.js');
+        ) as typeof import('../dev/plugin-simulation/preview.js');
         document.body.innerHTML = `<div class="protyle-wysiwyg" ${mobile ? '' : 'contenteditable="true"'}><div data-type="NodeListItem" data-node-id="20261101000001-bbbbbbb"><div class="protyle-action--task" contenteditable="false">□</div><div class="p" id="block" data-node-id="20261101000000-aaaaaaa" ${mobile ? 'contenteditable="true"' : ''}>旧的文字</div></div></div>`;
         window.state = lib.newProgress();
         window.activity = new lib.ActivityProgress(state);
@@ -55,8 +55,6 @@ try {
           css: lib.PLUGIN_CSS,
           async onConnect() {},
           onSound() {},
-          onRefresh() {},
-          async onResolve() {},
         });
         view.update({ state });
         view.open();
@@ -139,10 +137,6 @@ try {
         );
     });
     assert.deepEqual(await page.evaluate(() => totals()), beforeAuto);
-    assert.equal(
-      await page.evaluate(() => view.root.querySelector<HTMLElement>('.quest')!.hidden),
-      true,
-    );
     // Position at the middle of a wrapped line, far from the block's top-left.
     const caretResult = await page.evaluate(() => {
       view.stopCaretFollower();

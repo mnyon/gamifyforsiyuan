@@ -5,11 +5,11 @@
 | 目录                 | 内容                                                                 |
 | -------------------- | -------------------------------------------------------------------- |
 | `src/`               | 正式插件源码；按功能划分 Domain、Application、Adapters、Presentation |
-| `tests/`             | 自动化测试、测试替身与虚构数据；地图测试在 `territory/`              |
+| `tests/`             | 自动化测试、测试替身与虚构数据                                       |
 | `tools/`             | 构建、只读本地服务、浏览器检查及宣传图生成                           |
-| `dev/`               | 模拟插件、开发导出、历史实验和 HTML 模板；不进入正式插件依赖图       |
+| `dev/`               | 按 Feature 组织的开发模块、模拟插件、历史实验和 HTML 模板；不进入正式插件依赖图 |
 | `third_party/`       | 固定版本的第三方源码及许可证；不参与自有 TypeScript 迁移             |
-| `docs/`              | 架构、开发流程和地图机制说明                                         |
+| `docs/`              | 架构与开发流程说明                                                   |
 | `assets/`、`images/` | 插件使用的美术资源和说明截图                                         |
 | `dist/`              | 自动生成的安装包、调试模块和离线预览；不提交到仓库                   |
 
@@ -28,14 +28,14 @@ npm run build:test
 npm run preview:build
 ```
 
-正式安装包为 `dist/package.zip`，测试包为 `dist/package-test.zip`。构建会先清理对应生成目录，避免旧文件混入。离线实验页面在 `dist/previews/`；当前地图用 `npm run preview:terrain` 启动只读本地服务，详见 [地图说明](territory.md)。
+正式安装包为 `dist/package.zip`，测试包为 `dist/package-test.zip`。构建会先清理对应生成目录，避免旧文件混入。离线实验页面在 `dist/previews/`。
 
-安装 Chrome 后可执行 `npm run verify:adventure`、`npm run verify:activity`、`npm run verify:territory` 和 `npm run verify:previews`。这些检查使用虚构数据；运行前先生成上面的安装包和预览。
+安装 Chrome 后可执行 `npm run verify:adventure`、`npm run verify:activity` 和 `npm run verify:previews`。这些检查使用虚构数据；运行前先生成上面的安装包和预览。
 
 ## 发布
 
 1. 确认 `package.json`、`package-lock.json` 和 `plugin.json` 的版本一致；根据实际发布决定新版本号。
-2. 运行完整检查及构建，并完成上述浏览器验证；在思源中安装正式包，检查连接、奖励、角色面板与地图。
+2. 运行完整检查及构建，并完成上述浏览器验证；在思源中安装正式包，检查奖励入账、连接设置与角色面板。
 3. 检查待提交文件，提交源码、锁文件及文档，不提交 `dist`、`node_modules` 或 `.local`。
 4. 推送与版本一致的 `v版本号` 标签。Release 工作流会安装锁定依赖、执行完整检查、构建正式包，并创建附带安装包的草稿 Release。
 5. 核对草稿内容和安装包后再发布。

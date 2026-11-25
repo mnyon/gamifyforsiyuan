@@ -1,4 +1,4 @@
-import { required, optional, input, errorMessage } from './elements.js';
+import { required, input, errorMessage } from './elements.js';
 import type { Credentials } from '../features/connection/domain/credentials.js';
 import type { ProgressState } from '../features/progress/domain/types.js';
 import type { CompanionUser } from '../features/companion/domain/types.js';
@@ -43,16 +43,7 @@ export class GamifyView {
   caretFollower: CaretFollower | null = null;
   nativeCaretStyle?: HTMLStyleElement;
   caretGeometry?: { height: number };
-  constructor({
-    css,
-    onConnect,
-    onSound,
-    onRefresh,
-    onResolve,
-    onAdventureLoad,
-    onAdventureAction,
-    onOpenTerrain = () => {},
-  }: ViewOptions) {
+  constructor({ css, onConnect, onSound, onAdventureLoad, onAdventureAction }: ViewOptions) {
     this.host = document.createElement('div');
     this.host.id = 'gamify-for-siyuan-view';
     this.root = this.host.attachShadow({ mode: 'open' });
@@ -63,32 +54,17 @@ export class GamifyView {
           <div class="scene"><div class="orbit"></div><i class="star s1">✦</i><i class="star s2">✧</i><i class="star s3">·</i><i class="star s4">✦</i><div class="moon"></div><div class="hill back"></div><div class="hill front"></div><div class="pedestal"></div><div class="avatar" role="img" aria-label="Habitica 角色"><span class="placeholder">✧</span></div></div>
           <div class="identity"><span class="eyebrow player-caption">YOUR ADVENTURE</span><h2 class="player-name">冒险，从这里开始</h2><div class="player-meta">连接你的 Habitica 角色</div></div>
           <div class="vitals" hidden><div class="bar-label"><span><i class="heart">♥</i> 生命值</span><span class="hp-text"></span></div><div class="track hp"><span></span></div><div class="coins"><span>◈ <b class="gold">0</b> 金币</span><span class="level"></span></div></div>
-          <div class="quest"><div class="quest-top"><span class="eyebrow">下一次奖励</span><span class="fraction"><b class="progress">0</b><span> / </span><span class="target">—</span></span></div><div class="track reward"><span></span></div><p class="remaining">连接后，开始积累每一个完成</p><div class="pending"></div></div>
-          <div class="connection"><span class="connection-dot"></span><span class="connection-label">尚未连接 Habitica</span><button class="text refresh">刷新</button></div><div class="notice" role="status"></div><button class="resolve" hidden>核对待领取奖励</button>
+          <div class="notice" role="status"></div>
         </div>
         <form class="settings" hidden autocomplete="off"><span class="eyebrow">连接你的冒险</span><h2>与 Habitica 同行</h2><p>完成笔记里的小事，也让角色向前一步。</p><label>User ID<input name="userId" required spellcheck="false" autocomplete="off" placeholder="Habitica 用户 ID"></label><label>API Token<input name="token" type="password" required autocomplete="off" placeholder="Habitica API Token"></label><a href="https://habitica.com/user/settings/api" target="_blank" rel="noopener noreferrer">在 Habitica 中查看连接信息 ↗</a><label class="sound"><input name="sound" type="checkbox" checked> 完成音效<span>轻巧、短促的回应</span></label><button class="primary" type="submit">连接并保存</button><p class="privacy">凭据仅保存在当前设备；不上传笔记内容。连接时会创建一个最低难度的专用正向习惯。</p><div class="form-status" role="status"></div></form>
       </section><div class="toast" role="status" hidden>${STAR_ICON}<span></span></div><div class="particles" aria-hidden="true"></div><div class="line-effects" aria-hidden="true"></div><div class="announcer" role="status"></div>`;
     this.effects = new Set();
     this.effectTimers = new Set();
-    // Rewards are discovered through feedback; do not display goals or instructions.
-    required(this.root, '.quest').hidden = true;
     required(this.root, '.settings > p').textContent = '连接你的 Habitica 角色。';
     document.body.append(this.host);
     this.card = required(this.root, '.card');
     required(this.root, '.close').onclick = () => this.close();
     required(this.root, '.settings-toggle').onclick = () => this.settings(!this.isSettings);
-    required(this.root, '.refresh').onclick = () => onRefresh();
-    required(this.root, '.resolve').onclick = async () => {
-      await onResolve(false);
-      if (required(this.root, '.resolve').hidden) return;
-      required(this.root, '.retry').hidden = false;
-    };
-    const retry = document.createElement('button');
-    retry.className = 'resolve retry';
-    retry.hidden = true;
-    retry.textContent = '确认未到账，重新领取';
-    retry.onclick = () => onResolve(true);
-    required(this.root, '.dashboard').append(retry);
     const form = required(this.root, 'form');
     const sharing = document.createElement('div');
     sharing.className = 'connection-sharing';
@@ -122,26 +98,6 @@ export class GamifyView {
       onLoad: onAdventureLoad,
       onAction: onAdventureAction,
     });
-    const auxiliary = document.createElement('div');
-    auxiliary.className = 'companion-auxiliary';
-    const terrain = document.createElement('button');
-    terrain.type = 'button';
-    terrain.className = 'terrain-entry';
-    terrain.textContent = '笔记领地';
-    terrain.setAttribute('aria-label', '打开笔记领地地图');
-    const arrow = document.createElement('span');
-    arrow.textContent = '↗';
-    arrow.setAttribute('aria-hidden', 'true');
-    terrain.append(arrow);
-    terrain.onclick = () => {
-      try {
-        onOpenTerrain();
-      } catch (error) {
-        this.feedback(errorMessage(error));
-      }
-    };
-    auxiliary.append(terrain);
-    required(this.root, '.dashboard').append(auxiliary);
     this.outside = (event) => {
       if (
         !event.composedPath().includes(this.host) &&
@@ -188,15 +144,7 @@ export class GamifyView {
     this.adventure?.dismiss(true);
     this.card.hidden = true;
   }
-  update({
-    state,
-    user,
-    message = '',
-    status = 'offline',
-    backlog = 0,
-    testMode = false,
-    adventure = {},
-  }: ViewSnapshot) {
+  update({ state, user, message = '', testMode = false, adventure = {} }: ViewSnapshot) {
     this.editingApproach = editingApproach(state);
     this.testMode = testMode;
     if (testMode)
@@ -207,67 +155,7 @@ export class GamifyView {
     const text = (selector: string, value: unknown) => {
       required(this.root, selector).textContent = String(value);
     };
-    const progress = Math.min(state.credits.length, state.target || 0),
-      target = state.target;
-    const pending = Object.keys(state.pending).length;
-    text('.progress', progress);
-    text('.target', target ?? '—');
-    required(this.root, '.reward span').style.width =
-      `${target ? Math.min(100, (progress / target) * 100) : 0}%`;
-    let preview = optional(this.root, '.reward .pending-progress');
-    if (!preview) {
-      preview = document.createElement('i');
-      preview.className = 'pending-progress';
-      required(this.root, '.reward').append(preview);
-    }
-    preview.style.left = `${target ? Math.min(100, (progress / target) * 100) : 0}%`;
-    preview.style.width = `${target ? (Math.min(pending, Math.max(0, target - progress)) / target) * 100 : 0}%`;
-    let pendingCount = optional(this.root, '.pending-count');
-    if (!pendingCount) {
-      pendingCount = document.createElement('small');
-      pendingCount.className = 'pending-count';
-      required(this.root, '.fraction').append(pendingCount);
-    }
-    const fitting = Math.min(pending, Math.max(0, (target || 0) - progress));
-    const overflow = Math.max(0, state.credits.length + pending - (target || 0));
-    pendingCount.textContent = fitting ? ` +${fitting}` : '';
-    const waiting = state.rewards.filter((r) => r.status !== 'sent').length;
-    text(
-      '.remaining',
-      waiting
-        ? `${waiting} 次奖励待领取 · 继续积累下一轮`
-        : target
-          ? progress + fitting >= target
-            ? '本轮已集齐，待确认后结算'
-            : `再完成 ${Math.max(0, target - progress - fitting)} 个 TODO，迎接下一次奖励`
-          : '正在读取你的 TODO……',
-    );
-    text(
-      '.pending',
-      (pending
-        ? `${pending} 项待计入 · 保持勾选 ${testMode ? 3 : 60} 秒`
-        : testMode
-          ? '模拟进度独立保存 · 也可勾选笔记中的 TODO 测试'
-          : `未完成 ${backlog.toLocaleString()} 项 · 本轮目标固定，进度跨天保留`) +
-        (overflow ? ` · 另 ${overflow} 项留待下一轮` : ''),
-    );
     text('.notice', message);
-    text(
-      '.connection-label',
-      {
-        online: 'Habitica 已连接',
-        offline: '尚未连接 Habitica',
-        waiting: '奖励待领取',
-        paused: '当前窗口仅展示',
-        checking: '正在连接 Habitica',
-      }[status] || status,
-    );
-    if (testMode) text('.connection-label', '测试模式 · 不发送 Habitica 请求');
-    required(this.root, '.connection-dot').dataset.status = status;
-    required(this.root, '.resolve').hidden = !state.rewards.some((r) =>
-      ['sending', 'uncertain'].includes(r.status),
-    );
-    if (required(this.root, '.resolve').hidden) required(this.root, '.retry').hidden = true;
     required(this.root, '.vitals').hidden = !user;
     if (!user) {
       text('.player-name', '冒险，从这里开始');

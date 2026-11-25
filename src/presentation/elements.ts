@@ -4,7 +4,7 @@ export function required<K extends keyof HTMLElementTagNameMap>(
 ): HTMLElementTagNameMap[K];
 export function required(
   root: ParentNode,
-  selector: '.primary' | '.close' | '.refresh' | '.resolve' | '.settings-toggle',
+  selector: '.primary' | '.close' | '.settings-toggle',
 ): HTMLButtonElement;
 export function required(root: ParentNode, selector: string): HTMLElement;
 export function required(root: ParentNode, selector: string): HTMLElement {

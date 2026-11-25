@@ -7,8 +7,8 @@ export function skillBlockReason(
   if (!skill || !user) return '连接 Habitica 后查看职业技能';
   if (!['self', 'party'].includes(skill.target || ''))
     return skill.target === 'task'
-      ? '需要指定 Habitica 任务，请前往 Habitica 施放'
-      : '需要选择目标，请前往 Habitica 施放';
+      ? '需指定任务的技能，暂时不支持释放'
+      : '需选择目标的技能，暂时不支持释放';
   if (user.preferences?.disableClasses) return '当前账号已关闭职业系统';
   if (Number(user.stats?.lvl || 0) < skill.lvl) return `等级 ${skill.lvl} 解锁`;
   if ((user.stats?.hp ?? 0) <= 0) return '请先在 Habitica 恢复角色';

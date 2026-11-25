@@ -1,5 +1,6 @@
 import { invalidFixture } from './support.js';
-import type TestPlugin from '../dev/TestPlugin.js';
+import type TestPlugin from '../dev/plugin-simulation/TestPlugin.js';
+import { HabiticaError } from '../src/adapters/habitica/HabiticaError.js';
 import type { HabiticaClient } from '../src/adapters/habitica/HabiticaClient.js';
 import type { GamifyView } from '../src/presentation/GamifyView.js';
 import type { SiYuanProgressRepository } from '../src/features/progress/adapters/SiYuanProgressRepository.js';
@@ -36,9 +37,8 @@ test('build removes stale release output while preserving development sources', 
       fs.readFileSync(directory + '/docs/Document.md', 'utf8'),
       fs.readFileSync('docs/Document.md', 'utf8'),
     );
-    assert.ok(fs.existsSync(directory + '/terrain/vendor/THREE-LICENSE.txt'));
   }
-  assert.ok(fs.existsSync('dev/TestPlugin.ts'));
+  assert.ok(fs.existsSync('dev/plugin-simulation/TestPlugin.ts'));
 });
 function plugin(testBuild = true, extra: Record<string, unknown> = {}) {
   const memory = new Map<string, string>();
@@ -434,7 +434,7 @@ test('adventure task skill is rejected before mutation for every class', async (
         return {};
       },
     });
-    await assert.rejects(p.adventureAction('cast', 'targeted'), /指定 Habitica 任务/);
+    await assert.rejects(p.adventureAction('cast', 'targeted'), /需指定任务的技能，暂时不支持释放/);
     assert.equal(calls, 0);
   }
 });
@@ -546,106 +546,6 @@ test('mutating adventure requests never overlap a reward transaction or another 
   await assert.rejects(p.adventureAction('buy', 'armoire'), /正在同步/);
 });
 
-test('terrain dialog loads lazily, reuses its frame, and closes on unload', () => {
-  type Frame = {
-    tag: string;
-    style: Record<string, string>;
-    src?: string;
-    title?: string;
-    focused?: boolean;
-    focus(): void;
-  };
-  let created = 0,
-    destroyed = 0,
-    closed = 0,
-    frame: Frame | undefined;
-  const container = {
-    append: (f: Frame) => {
-      frame = f;
-    },
-  };
-  class Dialog {
-    element: {
-      isConnected: boolean;
-      querySelector(s: string): Frame | typeof container | undefined;
-    };
-    constructor(public options: { destroyCallback(): void }) {
-      created++;
-      this.options = options;
-      this.element = {
-        isConnected: true,
-        querySelector: (s: string) => (s === 'iframe' ? frame : container),
-      };
-    }
-    destroy() {
-      destroyed++;
-      this.element.isConnected = false;
-      this.options.destroyCallback();
-    }
-  }
-  const p = plugin(false, {
-    require: () => ({ Plugin: class {}, Dialog }),
-    document: {
-      createElement: (tag: string) => ({
-        tag,
-        style: {},
-        focused: false,
-        focus() {
-          this.focused = true;
-        },
-      }),
-    },
-    location: { origin: 'http://localhost' },
-    siyuan: { config: { system: { workspaceDir: 'G:/notes one' } } },
-  });
-  p.name = 'gamify-for-siyuan';
-  p.view = viewStub({ close: () => closed++, destroy: () => {} });
-  assert.equal(created, 0);
-  p.openTerrain();
-  assert.equal(created, 1);
-  assert.equal(closed, 1);
-  assert.equal(frame!.tag, 'iframe');
-  assert.equal(
-    frame!.src,
-    '/plugins/gamify-for-siyuan/terrain/index.html?workspace=G%3A%2Fnotes%20one',
-  );
-  p.openTerrain();
-  assert.equal(created, 1);
-  assert.equal(frame!.focused, true);
-  p.terrainDialog!.destroy();
-  assert.equal(p.terrainDialog, null);
-  p.openTerrain();
-  assert.equal(created, 2);
-  p.onunload();
-  assert.equal(destroyed, 2);
-  assert.equal(p.terrainDialog, null);
-  p.openTerrain();
-  assert.equal(created, 2);
-});
-
-test('packaged terrain has local dependencies and excludes development server', () => {
-  const base = 'dist/gamify-for-siyuan/terrain/';
-  for (const file of [
-    'index.html',
-    'app.js',
-    'world.js',
-    'cache.js',
-    'source.js',
-    'vendor/three.module.js',
-    'vendor/OrbitControls.js',
-    'vendor/THREE-LICENSE.txt',
-  ])
-    assert.ok(fs.statSync(base + file).size > 0, file);
-  assert.equal(fs.existsSync(base + 'server.ts'), false);
-  for (const file of ['app.js', 'world.js', 'cache.js', 'source.js']) {
-    const module = fs.readFileSync(base + file, 'utf8');
-    assert.doesNotMatch(module, /(?:from|import)\s*['"][^'"]*(?:\.ts|\.\.\/\.\.\/src)[^'"]*['"]/);
-  }
-  const html = fs.readFileSync(base + 'index.html', 'utf8');
-  assert.match(html, /\.\/vendor\/three.module.js/);
-  assert.doesNotMatch(html, /id="(?:auto|refresh)"/);
-});
-
 test('external progress update cancels queued plugin writes without restarting the writer', async () => {
   const p = plugin(false);
   Reflect.deleteProperty(p, 'persist');
@@ -692,7 +592,7 @@ test('corrupt persisted progress stops writer initialization before observations
   p.testMode = false;
   p.credentials = { userId: 'local', token: 'local' };
   await assert.rejects(p.initializeWriter(), /格式不正确/);
-  assert.deepEqual(calls, ['/api/file/getFile']);
+  assert.deepEqual(calls, ['/api/file/getFile', '/api/file/getFile']);
   assert.equal(p.editing, undefined);
   assert.equal(p.taskObserver, undefined);
 });
@@ -851,4 +751,58 @@ test('plugin manual reconciliation preserves confirmation and mutation exclusion
   assert.equal(marker, null);
   assert.equal(p.adventureUncertain, '');
   assert.equal(p.adventureBusy, false);
+});
+
+test('the drain timer reconnects pending rewards and stops after bad credentials', async () => {
+  const p = plugin(false);
+  assert.equal(p.testMode, false);
+  p.active = true;
+  p.credentials = { userId: 'local', token: 'local' };
+
+  let connects = 0;
+  p.connect = async () => {
+    connects++;
+  };
+  await p.drainQueue();
+  assert.equal(connects, 1);
+
+  p.connect = async () => {
+    throw new HabiticaError('Habitica 暂时不可用', true);
+  };
+  p.queueRetryAt = 0;
+  await p.drainQueue();
+  assert.equal(p.queueAttempts, 1);
+  assert.ok(p.queueRetryAt > Date.now());
+  await p.drainQueue();
+  assert.equal(p.queueAttempts, 1);
+
+  p.connect = async () => {
+    throw new HabiticaError('User ID 或 API Token 不正确');
+  };
+  p.queueRetryAt = 0;
+  await p.drainQueue();
+  assert.equal(p.autoRetryBlocked, true);
+  await p.drainQueue();
+  assert.equal(p.autoRetryBlocked, true);
+});
+
+test('the drain timer sends through an existing client instead of reconnecting', async () => {
+  const p = plugin(false);
+  p.testMode = false;
+  p.active = true;
+  p.client = clientStub({});
+  let resolved = 0,
+    flushed = 0;
+  p.resolveRewards = async () => {
+    resolved++;
+  };
+  p.flushRewards = async () => {
+    flushed++;
+  };
+  p.connect = async () => {
+    throw new Error('should not reconnect');
+  };
+  await p.drainQueue();
+  assert.equal(resolved, 1);
+  assert.equal(flushed, 1);
 });

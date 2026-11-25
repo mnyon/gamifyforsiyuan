@@ -16,7 +16,7 @@ import { required, errorMessage } from '../presentation/elements.js';
 import { parseProgress } from '../features/progress/adapters/progressSchema.js';
 import { queryRows, taskRows, updatedRows } from '../adapters/siyuan/queryRows.js';
 import { actionResult } from '../adapters/habitica/schema.js';
-import { Plugin, Dialog, getFrontend, toggleRightDock } from 'siyuan';
+import { Plugin, getFrontend, toggleRightDock } from 'siyuan';
 import { executeAction } from '../features/companion/application/executeAction.ts';
 import { acknowledgeAction } from '../features/companion/application/acknowledgeAction.ts';
 import { companionAction } from '../features/companion/domain/types.ts';
@@ -45,6 +45,8 @@ import {
 import { ActivityProgress, editingApproach } from '../features/progress/domain/ActivityProgress.ts';
 import { EditTracker } from '../features/progress/presentation/EditTracker.ts';
 import { HabiticaClient } from '../adapters/habitica/HabiticaClient.ts';
+import { HabiticaError } from '../adapters/habitica/HabiticaError.ts';
+import { RewardAuditLog } from '../features/progress/adapters/RewardAuditLog.ts';
 import { SiYuanProgressRepository as ProgressStorage } from '../features/progress/adapters/SiYuanProgressRepository.ts';
 import { SiYuanConnectionRepository as ConnectionStorage } from '../features/connection/adapters/SiYuanConnectionRepository.ts';
 
@@ -60,7 +62,6 @@ export default class GamifyForSiYuan extends Plugin {
   mobileTaskStyle?: HTMLStyleElement;
   message = '';
   status = 'offline';
-  backlog = 0;
   active = false;
   storageFailed = false;
   switchingMode = false;
@@ -76,13 +77,13 @@ export default class GamifyForSiYuan extends Plugin {
   activity!: ActivityProgress;
   progressStorage?: ProgressStorage;
   progressWriter?: ProgressWriter;
+  audit?: RewardAuditLog;
   editing?: EditTracker;
   client: HabiticaClient | null = null;
   user: CompanionUser | null = null;
   content: CompanionContent | null = null;
   shops: AdventureSnapshot['shops'] = null;
   habit?: Awaited<ReturnType<HabiticaClient['ensureHabit']>>;
-  terrainDialog: Dialog | null = null;
   lockAbort?: AbortController;
   releaseLock?: () => void;
   taskObserver?: MutationObserver;
@@ -92,6 +93,11 @@ export default class GamifyForSiYuan extends Plugin {
   dockClick?: (event: MouseEvent) => void;
   ws?: (event: CustomEvent<{ cmd?: string }>) => void;
   timer?: ReturnType<typeof setInterval>;
+  queueTimer?: ReturnType<typeof setInterval>;
+  queueRetryAt = 0;
+  queueAttempts = 0;
+  autoRetryBlocked = false;
+  lastReconcileMessage = '';
   scanTimer?: ReturnType<typeof setTimeout>;
   activitySaveTimer?: ReturnType<typeof setTimeout>;
   lastScan = 0;
@@ -122,9 +128,6 @@ export default class GamifyForSiYuan extends Plugin {
         this.saveCredentials();
         this.view.soundEnabled = value;
       },
-      onRefresh: () => this.refresh(),
-      onResolve: (retry) => this.resolveRewards(retry),
-      onOpenTerrain: () => this.openTerrain(),
       onAdventureLoad: (page) => this.loadAdventure(page),
       onAdventureAction: (kind, key) => this.adventureAction(kind, key),
     });
@@ -147,7 +150,6 @@ export default class GamifyForSiYuan extends Plugin {
     }
     this.message = '';
     this.status = 'offline';
-    this.backlog = 0;
     this.addIcons(
       HABITICA_ICON.replace('<svg ', '<symbol id="iconGamifyHabitica" ').replace(
         '</svg>',
@@ -236,39 +238,20 @@ export default class GamifyForSiYuan extends Plugin {
     this.render();
   }
 
-  openTerrain() {
-    if (this.disposed) return;
-    if (this.terrainDialog?.element?.isConnected) {
-      this.terrainDialog.element.querySelector('iframe')?.focus();
-      return;
-    }
-    this.terrainDialog = new Dialog({
-      title: '笔记领地',
-      content: '<div class="gamify-territory-frame" style="height:75vh;min-height:320px"></div>',
-      width: '94vw',
-      destroyCallback: () => {
-        this.terrainDialog = null;
-      },
-    });
-    const frame = document.createElement('iframe');
-    frame.title = '笔记领地地图';
-    frame.src =
-      '/plugins/' +
-      encodeURIComponent(this.name) +
-      '/terrain/index.html?workspace=' +
-      encodeURIComponent(globalThis.siyuan?.config?.system?.workspaceDir || location.origin);
-    frame.style.cssText = 'width:100%;height:100%;border:0;display:block';
-    required(this.terrainDialog.element, '.gamify-territory-frame').append(frame);
-    this.view.close();
-  }
-
   async initializeWriter() {
     this.progressStorage = new ProgressStorage(this.name);
+    this.audit = new RewardAuditLog(this.name);
     if (!this.testMode) {
+      await this.audit.load();
       try {
         await this.restoreSharedConnection();
-      } catch {
-        this.message = '未能读取同步连接信息；可以稍后刷新，或手动填写';
+      } catch (error) {
+        this.audit?.record({
+          at: Date.now(),
+          kind: 'connection',
+          action: 'shared-credentials-failed',
+          message: errorMessage(error),
+        });
       }
     }
     const state = this.testMode ? this.readTestState() : await this.progressStorage.read();
@@ -358,6 +341,7 @@ export default class GamifyForSiYuan extends Plugin {
       )
         this.scan();
     }, 1000);
+    this.startQueueTimer();
     if (!this.testMode && this.credentials.userId && this.credentials.token)
       await this.connect(this.credentials).catch((error) => this.report(error));
   }
@@ -419,7 +403,6 @@ export default class GamifyForSiYuan extends Plugin {
       if (this.testMode)
         this.engine.state.snapshot = { day: calendarDay(), backlog: 300, target: 3 };
       const result = this.engine.observe(rows);
-      this.backlog = result.backlog;
       if (before !== JSON.stringify(this.engine.state) || this.localDirty) await this.persist();
       this.localDirty = false;
       for (const id of result.completed) {
@@ -551,11 +534,21 @@ export default class GamifyForSiYuan extends Plugin {
       this.client.rememberUser(user);
       this.status = 'online';
       this.message = '';
+      this.queueAttempts = 0;
+      this.queueRetryAt = 0;
+      this.autoRetryBlocked = false;
+      this.audit?.record({ at: Date.now(), kind: 'connection', action: 'connected' });
       await this.resolveRewards();
       this.render();
       await this.flushRewards();
     } catch (error) {
       this.status = this.client ? 'online' : 'offline';
+      this.audit?.record({
+        at: Date.now(),
+        kind: 'connection',
+        action: 'connect-failed',
+        message: errorMessage(error),
+      });
       this.render();
       throw error;
     } finally {
@@ -588,6 +581,8 @@ export default class GamifyForSiYuan extends Plugin {
       return;
     if (this.engine.state.rewards.some((r) => ['sending', 'uncertain'].includes(r.status))) return;
     this.sending = true;
+    const before = this.rewardStatuses();
+    let failure: unknown;
     try {
       await settleRewards({
         state: this.engine.state,
@@ -610,18 +605,24 @@ export default class GamifyForSiYuan extends Plugin {
         },
       });
     } catch (error) {
+      failure = error;
       this.retryAfter = Date.now() + 60000;
       this.status = 'waiting';
-      this.message = errorMessage(error) + '；进度已保留';
-      this.render();
+      if (!(error instanceof HabiticaError)) {
+        this.message = `${errorMessage(error)}；进度已保留`;
+      }
     } finally {
+      this.auditTransitions(before, failure);
       this.sending = false;
+      this.render();
     }
   }
   async resolveRewards(retry = false) {
     if (this.testMode || this.switchingMode) return;
     if (!this.client || this.resolving || this.sending || this.adventureBusy) return;
     this.resolving = true;
+    const before = this.rewardStatuses();
+    let failure: unknown;
     try {
       await reconcileRewards({
         state: this.engine.state,
@@ -634,17 +635,118 @@ export default class GamifyForSiYuan extends Plugin {
             '请先确认 Habitica 的「在思源完成任务」没有收到这次加分。只有确认未到账才重试；误判可能重复发奖。确定重新领取？',
           ),
         onMessage: (message) => {
-          this.message = message;
+          if (message === this.lastReconcileMessage) return;
+          this.lastReconcileMessage = message;
+          this.audit?.record({
+            at: Date.now(),
+            kind: 'reward',
+            action: 'reconcile',
+            message,
+          });
         },
         onRetryQueued: () => {
           this.retryAfter = 0;
         },
       });
     } catch (error) {
+      failure = error;
       this.report(error);
     } finally {
+      this.auditTransitions(before, failure);
       this.resolving = false;
       this.render();
+    }
+  }
+  startQueueTimer() {
+    clearInterval(this.queueTimer);
+    this.queueTimer = setInterval(() => {
+      void this.drainQueue();
+    }, 60000);
+  }
+  rewardStatuses(): Map<string, string> {
+    return new Map(this.engine.state.rewards.map((reward) => [reward.id, reward.status]));
+  }
+  auditTransitions(before: Map<string, string>, failure?: unknown) {
+    if (!this.audit || !this.engine) return;
+    const message = failure === undefined ? undefined : errorMessage(failure);
+    for (const reward of this.engine.state.rewards) {
+      const from = before.get(reward.id);
+      if (from === reward.status) continue;
+      this.audit.record({
+        at: Date.now(),
+        kind: 'reward',
+        action:
+          reward.status === 'sent'
+            ? 'sent'
+            : reward.status === 'uncertain'
+              ? 'uncertain'
+              : 'status',
+        rewardId: reward.id,
+        from,
+        to: reward.status,
+        count: reward.count,
+        gold: reward.gold ?? null,
+        message,
+      });
+    }
+  }
+  async drainQueue() {
+    if (
+      this.disposed ||
+      !this.active ||
+      !this.engine ||
+      this.testMode ||
+      this.storageFailed ||
+      this.switchingMode ||
+      this.connecting ||
+      this.sending ||
+      this.resolving ||
+      this.refreshing ||
+      this.adventureBusy
+    )
+      return;
+    if (!this.engine.state.rewards.some((reward) => reward.status !== 'sent')) {
+      this.queueAttempts = 0;
+      this.queueRetryAt = 0;
+      return;
+    }
+    try {
+      if (this.client) {
+        const unresolved = this.engine.state.rewards.some(
+          (reward) => reward.status === 'sending' || reward.status === 'uncertain',
+        );
+        if (unresolved && Date.now() < this.queueRetryAt) return;
+        await this.resolveRewards();
+        if (unresolved) {
+          this.queueRetryAt = Date.now() + 10 * 60000;
+        }
+        await this.flushRewards();
+        return;
+      }
+      if (this.autoRetryBlocked) return;
+      if (!this.credentials.userId || !this.credentials.token) return;
+      if (Date.now() < this.queueRetryAt) return;
+      await this.connect(this.credentials);
+    } catch (error) {
+      const message =
+        typeof error === 'object' &&
+        error !== null &&
+        typeof (error as { message?: unknown }).message === 'string'
+          ? (error as { message: string }).message
+          : '暂时无法完成操作';
+      if (/User ID 或 API Token/.test(message)) {
+        this.autoRetryBlocked = true;
+        return;
+      }
+      this.queueAttempts++;
+      const delay = [60, 120, 300, 600][Math.min(this.queueAttempts - 1, 3)] ?? 600;
+      this.queueRetryAt = Date.now() + delay * 1000;
+      this.audit?.record({
+        at: Date.now(),
+        kind: 'connection',
+        action: 'reconnect-backoff',
+        message,
+      });
     }
   }
   async refresh() {
@@ -689,13 +791,10 @@ export default class GamifyForSiYuan extends Plugin {
   }
   render() {
     if (!this.view || !this.engine || this.disposed) return;
-    const waiting = this.engine.state.rewards.some((r) => r.status !== 'sent');
     this.view.update({
       state: this.engine.state,
       user: this.testMode ? null : this.user,
-      backlog: this.backlog,
       testMode: this.testMode,
-      status: !this.active ? 'paused' : waiting ? 'waiting' : this.status,
       message: this.message,
       adventure: {
         content: this.content,
@@ -706,7 +805,6 @@ export default class GamifyForSiYuan extends Plugin {
           : !this.active
             ? '请在主窗口操作'
             : '',
-        updated: this.client?.cache?.get('/user')?.at || 0,
       },
     });
     if (this.reconcileButton) {
@@ -820,7 +918,14 @@ export default class GamifyForSiYuan extends Plugin {
   }
 
   report(error: unknown) {
-    this.message = errorMessage(error);
+    const message = errorMessage(error);
+    this.audit?.record({
+      at: Date.now(),
+      kind: error instanceof HabiticaError ? 'connection' : 'reward',
+      action: 'error',
+      message,
+    });
+    if (!(error instanceof HabiticaError)) this.message = message;
     this.render();
   }
   readTestState() {
@@ -855,13 +960,13 @@ export default class GamifyForSiYuan extends Plugin {
     this.editing?.stop();
     this.disposed = true;
     clearInterval(this.timer);
+    clearInterval(this.queueTimer);
     clearTimeout(this.scanTimer);
+    void this.audit?.flush();
     this.taskObserver?.disconnect();
     if (this.click) document.removeEventListener('click', this.click, true);
     if (this.dockClick) document.removeEventListener('click', this.dockClick, true);
     if (this.ws) this.eventBus.off('ws-main', this.ws);
-    this.terrainDialog?.destroy();
-    this.terrainDialog = null;
     this.view?.destroy();
     this.lockAbort?.abort();
     this.releaseLock?.();

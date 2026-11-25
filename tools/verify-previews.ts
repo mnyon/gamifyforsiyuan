@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import type {} from '../dev/legacyTerrain.js';
+import type {} from '../dev/note-world/legacy/canvas/legacyTerrain.js';
 
 const require = createRequire(
   process.env.GAMIFY_RENDER_NODE_MODULES

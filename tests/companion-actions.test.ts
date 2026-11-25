@@ -127,7 +127,7 @@ test('insufficient funds, gems, locked items and targeted skills never persist o
   f.catalog.skillFor = () => ({ key: 'pickPocket', target: 'task', mana: 1, lvl: 1 });
   await assert.rejects(
     executeAction({ kind: 'cast', key: 'pickPocket' }, f.ports),
-    /指定 Habitica 任务/,
+    /需指定任务的技能，暂时不支持释放/,
   );
   assert.deepEqual(f.events, ['catalog', 'user']);
 });

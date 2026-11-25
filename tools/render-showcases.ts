@@ -52,7 +52,7 @@ try {
         const lib = new Function('require', 'module', bundle + '\nreturn GamifyPreview;')(
           () => ({ Plugin: class {} }),
           { exports: {} },
-        ) as typeof import('../dev/preview.js');
+        ) as typeof import('../dev/plugin-simulation/preview.js');
         const state = lib.newProgress();
         state.target = 12;
         state.total = 8;
@@ -81,11 +81,9 @@ try {
           css: lib.PLUGIN_CSS,
           onConnect: async () => {},
           onSound: () => {},
-          onRefresh: () => {},
-          onResolve: async () => {},
         });
         view.host.dataset.theme = light ? 'light' : 'dark';
-        view.update({ state, user, status: 'online', backlog: 1190 });
+        view.update({ state, user });
         view.open();
         view.root.querySelector<HTMLElement>('.card')!.style.cssText =
           'right:100px;bottom:68px;transform:scale(.78);transform-origin:bottom right;max-height:none;';
@@ -138,13 +136,13 @@ try {
         el.querySelector<HTMLElement>('.box')!.textContent = '✓';
         if (kind === 'complete') {
           state.pending = { demo: { since: Date.now(), day: '2026-11-20' } };
-          view.update({ state, user, status: 'online', backlog: 1190 });
+          view.update({ state, user });
           view.completeTodo({ element: el, blockId: 'showcase-todo' });
         } else {
           user.stats.gp += 0.12;
           state.total++;
           state.credits = [];
-          view.update({ state, user, status: 'online', backlog: 1190 });
+          view.update({ state, user });
           view.rewardFeedback(0.12, { element: el, blockId: 'showcase-todo' });
         }
       }, kind);

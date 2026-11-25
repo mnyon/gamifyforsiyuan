@@ -42,19 +42,14 @@ export interface ViewOptions {
   css: string;
   onConnect: (value: Credentials) => Promise<void>;
   onSound: (sound: boolean) => void;
-  onRefresh: () => unknown;
-  onResolve: (retry: boolean) => Promise<unknown>;
   onTestAction?: (action: string) => Promise<unknown>;
   onAdventureLoad?: AdventureOptions['onLoad'];
   onAdventureAction?: AdventureOptions['onAction'];
-  onOpenTerrain?: () => void;
 }
 export interface ViewSnapshot {
   state: ProgressState;
   user?: CompanionUser | null;
   message?: string;
-  status?: string;
-  backlog?: number;
   testMode?: boolean;
   adventure?: AdventureSnapshot;
 }
