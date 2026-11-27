@@ -168,3 +168,16 @@ export function actionResult(value: unknown): ArmoireResult {
   });
   return row as ArmoireResult;
 }
+/** Equip responses carry the updated user.items; validate the gear sets we read. */
+export function equipResult(value: unknown): Record<string, unknown> {
+  const row = object(value);
+  nested(row, 'gear', (gear) => {
+    for (const kind of ['equipped', 'costume'])
+      nested(gear, kind, (entries) =>
+        dictionary(entries, (v) => {
+          if (typeof v !== 'string') throw Error('Habitica 装备字段无效');
+        }),
+      );
+  });
+  return row;
+}

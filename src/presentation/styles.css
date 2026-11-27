@@ -177,6 +177,7 @@ footer{padding:12px;text-align:center;border-top:1px solid var(--line);font-size
 .bag-detail h3{font-size:15px;color:#e6d3ae;margin:3px 0 7px}
 .bag-detail p{font-size:10px;color:#afa4bc;line-height:1.8;margin:0 0 9px}
 .bag-detail small{font-size:9px;color:#928699}
+.detail-actions{margin-top:10px}.bag-detail .primary{width:auto;padding:7px 18px;font-size:11px}
 .bag-heading-merged{position:relative;isolation:isolate;min-height:113px;gap:12px;margin:12px 0 17px;padding:10px 0 15px;border-bottom:1px solid #c2a87920;background:radial-gradient(ellipse at 13% 55%,#c59b4e14,transparent 60%)}
 .bag-title-art{width:70px;height:80px;flex-shrink:0;display:grid;place-items:center}
 .bag-title-art svg{width:76px;height:76px;filter:drop-shadow(2px 4px 1px #0005)}

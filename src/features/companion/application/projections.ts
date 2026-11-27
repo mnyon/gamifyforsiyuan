@@ -226,4 +226,4 @@ export function avatarLayers(user: CompanionUser) {
   );
 }
 
-export { skillBlockReason, purchaseBlockReason } from '../domain/eligibility.js';
+export { skillBlockReason, purchaseBlockReason, equipBlockReason } from '../domain/eligibility.js';

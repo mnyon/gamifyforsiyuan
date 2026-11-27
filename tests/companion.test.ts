@@ -7,6 +7,7 @@ import {
   inventoryItems,
   shopItems,
   purchaseBlockReason,
+  equipBlockReason,
   armoireReward,
 } from '../src/features/companion/application/projections.ts';
 import { HabiticaClient } from '../src/adapters/habitica/HabiticaClient.ts';
@@ -98,6 +99,25 @@ test('shop uses server prices and lock state; gems, unavailable armoire, and own
   u.flags.armoireEnabled = false;
   assert.equal(purchaseBlockReason(shopItems({}, {}, {}, {}, u).at(-1)!, u), '尚未解锁');
   assert.equal(purchaseBlockReason({ ...products[0], owned: true }, u), '已拥有');
+});
+test('equip requires a connected account and ownership of the gear', () => {
+  assert.match(equipBlockReason(undefined, null), /连接 Habitica/);
+  const gear = { key: 'weapon_rogue_4', equipped: false };
+  assert.equal(
+    equipBlockReason(gear, { items: { gear: { owned: { weapon_rogue_4: true } } } }),
+    '',
+  );
+  assert.equal(equipBlockReason(gear, { items: { gear: { owned: {} } } }), '尚未持有这件装备');
+  assert.equal(equipBlockReason(gear, {}), '尚未持有这件装备');
+  assert.equal(
+    equipBlockReason(
+      { key: 'weapon_rogue_4', equipped: true },
+      {
+        items: { gear: { owned: { weapon_rogue_4: true } } },
+      },
+    ),
+    '',
+  );
 });
 test('armoire reveals only the server reward, including food and experience', () => {
   assert.equal(armoireReward({}, {}), null);

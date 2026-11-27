@@ -3,11 +3,13 @@ import type {
   CompanionAction,
   CompanionSkill,
   CompanionUser,
+  EquippableGear,
   PurchasableItem,
 } from '../domain/types.js';
 export interface ActionCatalog {
   skillFor(user: CompanionUser, key: string): CompanionSkill | undefined;
   productFor(user: CompanionUser, key: string): PurchasableItem | undefined;
+  gearFor(user: CompanionUser, key: string): EquippableGear | undefined;
 }
 export interface CompanionGateway {
   loadCatalog(kind: CompanionAction['kind']): Promise<ActionCatalog>;

@@ -25,6 +25,7 @@ function fixture() {
   const catalog: ActionCatalog = {
     skillFor: () => ({ key: 'stealth', target: 'self', lvl: 14, mana: 45 }),
     productFor: () => ({ key: 'armoire', price: 100, currency: 'gold', kind: 'armoire' }),
+    gearFor: () => ({ key: 'weapon_rogue_4', equipped: false }),
   };
   const ports: ExecuteActionPorts = {
     now: () => 123,
@@ -106,6 +107,63 @@ test('skill casting uses the same durable workflow without invalidating shop dat
     'clear',
     'user',
   ]);
+});
+
+test('equipping uses the durable workflow without invalidating shop data', async () => {
+  const f = fixture();
+  f.user.items = { gear: { owned: { weapon_rogue_4: true }, equipped: {} } };
+  const outcome = await executeAction({ kind: 'equip', key: 'weapon_rogue_4' }, f.ports);
+  assert.equal(outcome.result, f.result);
+  assert.equal(f.pending, false);
+  assert.deepEqual(f.events, [
+    'catalog',
+    'user',
+    'persist',
+    'equip',
+    'invalidate-user',
+    'clear',
+    'user',
+  ]);
+  assert.deepEqual(f.statuses, ['pending', '']);
+});
+
+test('equipping unowned or unknown gear never persists or submits', async () => {
+  const unknown = fixture();
+  unknown.catalog.gearFor = () => undefined;
+  await assert.rejects(
+    executeAction({ kind: 'equip', key: 'weapon_rogue_4' }, unknown.ports),
+    /装备目录已变化/,
+  );
+  assert.deepEqual(unknown.events, ['catalog', 'user']);
+  const unowned = fixture();
+  unowned.user.items = { gear: { owned: {}, equipped: {} } };
+  await assert.rejects(
+    executeAction({ kind: 'equip', key: 'weapon_rogue_4' }, unowned.ports),
+    /尚未持有这件装备/,
+  );
+  assert.deepEqual(unowned.events, ['catalog', 'user']);
+  assert.equal(unowned.pending, false);
+});
+
+test('ambiguous equip keeps its marker and blocks later submissions like other mutations', async () => {
+  const f = fixture();
+  f.user.items = { gear: { owned: { weapon_rogue_4: true }, equipped: {} } };
+  f.ports.gateway.execute = async () => {
+    f.events.push('equip');
+    throw Object.assign(Error('network'), { uncertain: true });
+  };
+  await assert.rejects(
+    executeAction({ kind: 'equip', key: 'weapon_rogue_4' }, f.ports),
+    /不会自动重发/,
+  );
+  assert.equal(f.pending, true);
+  assert.deepEqual(f.statuses, ['pending', 'uncertain']);
+  const before = [...f.events];
+  await assert.rejects(
+    executeAction({ kind: 'equip', key: 'weapon_rogue_4' }, f.ports),
+    /尚未确认/,
+  );
+  assert.deepEqual(f.events, before);
 });
 
 test('insufficient funds, gems, locked items and targeted skills never persist or submit', async () => {
@@ -278,9 +336,14 @@ test('invalid action identifiers fail before touching storage', () => {
   for (const [kind, key] of [
     ['buy', '../bad'],
     ['cast', 'spell/other'],
+    ['equip', '../bad'],
     ['unknown', 'key'],
   ])
     assert.throws(() => companionAction(kind, key));
+  assert.deepEqual(companionAction('equip', 'weapon_rogue_4'), {
+    kind: 'equip',
+    key: 'weapon_rogue_4',
+  });
   let writes = 0;
   const journal = new LocalActionJournal('workspace', 'account', {
     getItem: () => null,
@@ -302,12 +365,14 @@ test('Habitica companion adapter selects official catalogs and forces fresh acco
     },
     cast: async (key: string) => ({ cast: key }),
     buy: async (key: string) => ({ buy: key }),
+    equip: async (key: string) => ({ equip: key }),
     invalidateUser() {},
     invalidateShops() {},
   };
   const gateway = new HabiticaCompanionGateway(client, async (kind) => ({
     content: {
       spells: { rogue: { stealth: { key: 'stealth', target: 'self', mana: 45, lvl: 14 } } },
+      gear: { flat: { weapon_rogue_4: { key: 'weapon_rogue_4', text: '暗影短剑' } } },
     },
     shops: { market: {}, gear: {}, seasonal: {} },
   }));
@@ -317,6 +382,14 @@ test('Habitica companion adapter selects official catalogs and forces fresh acco
   assert.equal(catalog.productFor(user, 'armoire')!.price, 100);
   assert.equal(catalog.skillFor(user, 'stealth')!.target, 'self');
   assert.equal(catalog.productFor(user, 'missing'), undefined);
+  assert.deepEqual(catalog.gearFor(user, 'weapon_rogue_4'), {
+    key: 'weapon_rogue_4',
+    equipped: false,
+  });
+  assert.equal(catalog.gearFor(user, 'missing'), undefined);
   assert.deepEqual(await gateway.execute({ kind: 'cast', key: 'stealth' }), { cast: 'stealth' });
   assert.deepEqual(await gateway.execute({ kind: 'buy', key: 'armoire' }), { buy: 'armoire' });
+  assert.deepEqual(await gateway.execute({ kind: 'equip', key: 'weapon_rogue_4' }), {
+    equip: 'weapon_rogue_4',
+  });
 });

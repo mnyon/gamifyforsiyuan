@@ -867,8 +867,11 @@ export default class GamifyForSiYuan extends Plugin {
       },
     };
   }
-  async adventureAction(kind: 'buy' | 'cast', key: string): Promise<ArmoireResult | void> {
-    if (this.testMode) throw new Error('测试构建不执行真实购买或施放');
+  async adventureAction(
+    kind: 'buy' | 'cast' | 'equip',
+    key: string,
+  ): Promise<ArmoireResult | void> {
+    if (this.testMode) throw new Error('测试构建不执行真实购买、施放或装备');
     if (this.disposed || !this.active || !this.client) throw new Error('请在已连接的主窗口操作');
     if (this.adventureBusy || this.sending || this.resolving || this.connecting || this.refreshing)
       throw new Error('正在同步奖励或处理请求，请稍后再试');
@@ -901,7 +904,7 @@ export default class GamifyForSiYuan extends Plugin {
     )
       return;
     const confirmed = globalThis.confirm(
-      '请先到 Habitica 核对上次购买或技能是否已生效。解除暂停不会重新发送该操作。确认已核对并解除暂停？',
+      '请先到 Habitica 核对上次购买、技能或装备是否已生效。解除暂停不会重新发送该操作。确认已核对并解除暂停？',
     );
     if (!confirmed) return;
     const ports = this.companionPorts(this.client);

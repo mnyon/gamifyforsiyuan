@@ -21,7 +21,10 @@ const capture = process.argv.includes('--screenshots');
 const cache = path.resolve(process.env.GAMIFY_ART_CACHE || path.join(root, '.local', 'art-cache'));
 fs.mkdirSync(cache, { recursive: true });
 const code = fs.readFileSync(path.join(root, 'dist/dev/preview.js'), 'utf8');
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await chromium.launch({
+  channel: process.env.GAMIFY_BROWSER_CHANNEL || 'chrome',
+  headless: true,
+});
 try {
   for (const mobile of [false, true]) {
     const context = await browser.newContext({
@@ -86,9 +89,18 @@ try {
           onConnect: async () => {},
           onSound: () => {},
           onAdventureLoad: async () => {},
-          onAdventureAction: async () => {
+          onAdventureAction: async (kind, key) => {
             actions++;
             await new Promise<void>((r) => setTimeout(r, 80));
+            if (kind === 'equip') {
+              // Simulated toggle, mirroring the official endpoint semantics.
+              const equipped = user.items.gear.equipped as Record<string, string>;
+              const slot = key.split('_')[0];
+              if (equipped[slot] === key) delete equipped[slot];
+              else equipped[slot] = key;
+              view.update({ state, user, adventure: { content, shops } });
+              return;
+            }
             return {
               armoire: {
                 type: 'gear',
@@ -173,6 +185,25 @@ try {
     await shadow.locator('.bag-slot[aria-label]').last().click();
     assert.ok(await shadow.locator('.bag-detail h3').textContent());
     await shadow.getByRole('button', { name: '全部', exact: true }).click();
+    // Equip loop: unequip a worn item, the avatar must follow, then wear it again.
+    await shadow.getByRole('button', { name: '装备', exact: true }).click();
+    const wornCount = await shadow.locator('.bag-slot[aria-label*="已装备"]').count();
+    const layerCount = () =>
+      page.evaluate(() => demo.view.root.querySelectorAll('.avatar img').length);
+    const layersBefore = await layerCount();
+    await shadow.locator('.bag-slot[aria-label*="已装备"]').first().click();
+    await shadow.locator('.bag-detail .primary').click();
+    await shadow.locator('.adventure-sheet .primary').click();
+    await page.waitForFunction(() => demo.view.adventure.overlay.hidden);
+    assert.equal(await shadow.locator('.bag-slot[aria-label*="已装备"]').count(), wornCount - 1);
+    assert.equal(await layerCount(), layersBefore - 1);
+    await shadow.locator('.bag-detail .primary').click();
+    await shadow.locator('.adventure-sheet .primary').click();
+    await page.waitForFunction(() => demo.view.adventure.overlay.hidden);
+    assert.equal(await shadow.locator('.bag-slot[aria-label*="已装备"]').count(), wornCount);
+    assert.equal(await layerCount(), layersBefore);
+    assert.equal(await page.evaluate(() => demo.actions()), 3);
+    await shadow.getByRole('button', { name: '全部', exact: true }).click();
     if (capture && !mobile) {
       await page.evaluate(() => {
         document.querySelector<HTMLElement>('#showcase-title')!.textContent =
@@ -206,7 +237,7 @@ try {
     await shadow.locator('.opening .primary').click();
     await page.waitForFunction(() => demo.view.adventure.chest?.revealed);
     assert.equal(await shadow.locator('.opening h3').textContent(), '水晶新月法杖');
-    assert.equal(await page.evaluate(() => demo.actions()), 2);
+    assert.equal(await page.evaluate(() => demo.actions()), 4);
     if (capture && !mobile) {
       await page.waitForTimeout(750);
       await page.evaluate(() => {
@@ -267,6 +298,7 @@ try {
     assert.equal(apiCalls, 0);
     assert.deepEqual(errors, []);
     console.log('Adventure UI passed: ' + (mobile ? 'mobile' : 'desktop'));
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
     await context.close();
   }
 } finally {

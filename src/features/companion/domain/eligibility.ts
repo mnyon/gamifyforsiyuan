@@ -1,4 +1,4 @@
-import type { CompanionSkill, CompanionUser, PurchasableItem } from './types.js';
+import type { CompanionSkill, CompanionUser, EquippableGear, PurchasableItem } from './types.js';
 
 export function skillBlockReason(
   skill: CompanionSkill | null | undefined,
@@ -14,6 +14,15 @@ export function skillBlockReason(
   if ((user.stats?.hp ?? 0) <= 0) return '请先在 Habitica 恢复角色';
   if (Number(user.stats?.mp || 0) < skill.mana) return '法力不足';
   if (skill.key === 'frost' && user.stats?.buffs?.streaks) return '冰霜增益已生效';
+  return '';
+}
+
+export function equipBlockReason(
+  gear: EquippableGear | null | undefined,
+  user: CompanionUser | null | undefined,
+) {
+  if (!gear || !user) return '连接 Habitica 后管理装备';
+  if (user.items?.gear?.owned?.[gear.key] !== true) return '尚未持有这件装备';
   return '';
 }
 

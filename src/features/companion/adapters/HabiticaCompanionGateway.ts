@@ -15,6 +15,7 @@ export interface HabiticaCompanionClient {
   user(options: { fresh: boolean }): Promise<CompanionUser>;
   buy(key: string): Promise<unknown>;
   cast(key: string): Promise<unknown>;
+  equip(key: string): Promise<unknown>;
   invalidateUser(): void;
   invalidateShops(): void;
 }
@@ -39,13 +40,22 @@ export class HabiticaCompanionGateway implements CompanionGateway {
           (item) => item.key === key,
         );
       },
+      gearFor(user, key) {
+        if (!content?.gear?.flat?.[key]) return undefined;
+        return {
+          key,
+          equipped: Object.values(user.items?.gear?.equipped || {}).includes(key),
+        };
+      },
     };
   }
   readPlayer(): Promise<CompanionUser> {
     return this.client.user({ fresh: true });
   }
   execute(action: CompanionAction): Promise<unknown> {
-    return action.kind === 'cast' ? this.client.cast(action.key) : this.client.buy(action.key);
+    if (action.kind === 'cast') return this.client.cast(action.key);
+    if (action.kind === 'equip') return this.client.equip(action.key);
+    return this.client.buy(action.key);
   }
   invalidateUser(): void {
     this.client.invalidateUser();

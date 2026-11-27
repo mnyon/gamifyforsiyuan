@@ -41,7 +41,7 @@ test('malformed shared account read is rejected for all callers without poisonin
   assert.equal((await client.user()).stats!.gp, 9);
   assert.equal(count, 2);
 });
-for (const action of ['buy', 'cast', 'score', 'ensureHabit'] as const)
+for (const action of ['buy', 'cast', 'equip', 'score', 'ensureHabit'] as const)
   test(
     'malformed successful ' +
       action +
@@ -65,6 +65,33 @@ for (const action of ['buy', 'cast', 'score', 'ensureHabit'] as const)
       assert.equal(calls, action === 'ensureHabit' ? 2 : 1);
     },
   );
+test('equip posts to the battle-set endpoint and validates the returned gear', async () => {
+  const requests: Array<{ url: string; method?: string }> = [];
+  const client = new HabiticaClient(
+    {},
+    stubFetch(async (url, options) => {
+      requests.push({ url, method: options.method });
+      return ok({ gear: { equipped: { weapon: 'weapon_rogue_4' }, costume: {} } });
+    }),
+    () => 0,
+    null,
+  );
+  const result = await client.equip('weapon_rogue_4');
+  assert.equal(requests[0].url, 'https://habitica.com/api/v3/user/equip/equipped/weapon_rogue_4');
+  assert.equal(requests[0].method, 'POST');
+  assert.ok(result.gear);
+  await assert.rejects(client.equip('../bad'), /装备标识不正确/);
+  const malformed = new HabiticaClient(
+    {},
+    stubFetch(async () => ok({ gear: { equipped: { weapon: 5 } } })),
+    () => 0,
+    null,
+  );
+  await assert.rejects(
+    malformed.equip('weapon_rogue_4'),
+    (e) => e instanceof Error && 'uncertain' in e && e.uncertain === true,
+  );
+});
 test('corrupt persisted content is discarded and replaced only after validated network content', async () => {
   const values = new Map([
     [

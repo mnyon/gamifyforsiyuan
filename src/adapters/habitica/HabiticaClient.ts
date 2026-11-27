@@ -205,6 +205,15 @@ export class HabiticaClient implements HabiticaRewardClient, HabiticaCompanionCl
       true,
     );
   }
+  /** The official endpoint toggles: sending the worn key unequips it. Battle set only. */
+  async equip(key: string) {
+    if (!/^[\w-]+$/.test(key)) throw new Error('装备标识不正确');
+    return this.decode(
+      await this.request(`/user/equip/equipped/${key}`, 'POST'),
+      schema.equipResult,
+      true,
+    );
+  }
   async task(alias: string) {
     return this.decode(await this.request(`/tasks/${encodeURIComponent(alias)}`), schema.task);
   }

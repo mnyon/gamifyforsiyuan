@@ -67,7 +67,8 @@ export interface PurchasableItem {
   owned?: boolean;
   locked?: boolean;
 }
-export type CompanionAction = { kind: 'cast'; key: string } | { kind: 'buy'; key: string };
+export type CompanionAction =
+  { kind: 'cast'; key: string } | { kind: 'buy'; key: string } | { kind: 'equip'; key: string };
 export type ActionStatus = '' | 'pending' | 'uncertain';
 export interface ActionRecord {
   kind: CompanionAction['kind'];
@@ -75,10 +76,15 @@ export interface ActionRecord {
   at: number;
 }
 export function companionAction(kind: unknown, key: unknown): CompanionAction {
-  if (kind !== 'cast' && kind !== 'buy') throw new Error('不支持的操作');
+  if (kind !== 'cast' && kind !== 'buy' && kind !== 'equip') throw new Error('不支持的操作');
   if (typeof key !== 'string' || !(kind === 'cast' ? /^[a-zA-Z]+$/ : /^[\w-]+$/).test(key))
     throw new Error(kind === 'cast' ? '技能标识不正确' : '商品标识不正确');
   return { kind, key };
+}
+/** A gear entry from the official catalog, with its current battle-set state. */
+export interface EquippableGear {
+  key: string;
+  equipped: boolean;
 }
 export function hasUncertainResult(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'uncertain' in error && !!error.uncertain;

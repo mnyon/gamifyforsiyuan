@@ -1,4 +1,4 @@
-import { skillBlockReason, purchaseBlockReason } from '../domain/eligibility.js';
+import { skillBlockReason, purchaseBlockReason, equipBlockReason } from '../domain/eligibility.js';
 import { hasUncertainResult } from '../domain/types.js';
 import type { CompanionAction } from '../domain/types.js';
 import type { ExecuteActionPorts } from './ports.js';
@@ -22,6 +22,11 @@ export async function executeAction(
     const spell = catalog.skillFor(user, action.key);
     if (!spell) throw new Error('当前职业没有这个技能');
     const reason = skillBlockReason(spell, user);
+    if (reason) throw new Error(reason);
+  } else if (action.kind === 'equip') {
+    const gear = catalog.gearFor(user, action.key);
+    if (!gear) throw new Error('装备目录已变化，请重新打开背包');
+    const reason = equipBlockReason(gear, user);
     if (reason) throw new Error(reason);
   } else {
     const item = catalog.productFor(user, action.key);

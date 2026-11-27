@@ -1,18 +1,16 @@
-import { required, optional, errorMessage } from '../../../presentation/elements.js';
+import { required, errorMessage } from '../../../presentation/elements.js';
 import type { GamifyView } from '../../../presentation/GamifyView.js';
 import type {
   CompanionUser,
   CompanionContent,
   ShopSnapshot,
-  CatalogSkill,
-  ShopItem,
   ArmoireResult,
   RewardPresentation,
 } from '../domain/types.js';
 export type AdventurePage = 'home' | 'shop' | 'bag';
 export interface AdventureOptions {
   onLoad?: (page: AdventurePage) => Promise<void>;
-  onAction?: (kind: 'buy' | 'cast', key: string) => Promise<ArmoireResult | void>;
+  onAction?: (kind: 'buy' | 'cast' | 'equip', key: string) => Promise<ArmoireResult | void>;
 }
 export interface AdventureSnapshot {
   user?: CompanionUser | null;
@@ -22,28 +20,26 @@ export interface AdventureSnapshot {
   blocked?: string;
   testMode?: boolean;
 }
-import {
-  assetURL,
-  plainNotes,
-  skillBlockReason,
-  resourceLimits,
-  inventoryItems,
-  shopItems,
-  purchaseBlockReason,
-  armoireReward,
-  safeAsset,
-} from '../application/projections.js';
+import { assetURL, resourceLimits } from '../application/projections.js';
+import { SkillPanel } from './SkillPanel.js';
+import { ShopPanel } from './ShopPanel.js';
+import { BagPanel } from './BagPanel.js';
+import { ChestOverlay, type ChestState } from './ChestOverlay.js';
 
 // All remote names and descriptions enter the DOM through textContent.
 export const PACK_ART =
   '<svg viewBox="0 0 64 64" aria-hidden="true" shape-rendering="crispEdges"><path d="M24 9h16v5h5v5h6v35H13V19h6v-5h5z" fill="#211822"/><path d="M26 11h12v9h-4v-5h-4v5h-4z" fill="#c59c64"/><path d="M19 22h26v30H19z" fill="#674238"/><path d="M15 29h7v22h-7zm27 0h7v22h-7z" fill="#96664a"/><path d="M20 20h24v16H20z" fill="#bd8d58"/><path d="M23 20h18v4H23z" fill="#dfb778"/><path d="M23 38h18v14H23z" fill="#9c6848"/><path d="M28 29h8v11h-8z" fill="#4e3330"/><path d="M29 30h6v6h-6z" fill="#edca7c"/><path d="M31 31h2v3h-2z" fill="#67442e"/><path d="M17 51h30v4H17z" fill="#3b2930"/><path d="M14 23h6v5h-6zm30 0h6v5h-6z" fill="#dec89f"/></svg>';
+/**
+ * Adventure shell: navigation, shared snapshot state and the dialog/overlay
+ * infrastructure. Page rendering lives in SkillPanel/ShopPanel/BagPanel and
+ * the armoire reveal in ChestOverlay, each holding this view as its host.
+ */
 export class AdventureView {
   view: GamifyView;
   root: ShadowRoot;
   onLoad: NonNullable<AdventureOptions['onLoad']>;
   onAction: NonNullable<AdventureOptions['onAction']>;
   page: AdventurePage;
-  category: string;
   base: string;
   shopButton: HTMLButtonElement;
   bagButton: HTMLButtonElement;
@@ -58,13 +54,12 @@ export class AdventureView {
   blocked = '';
   testMode = false;
   signature = '';
-  skillSignature = '';
-  products: ShopItem[] = [];
-  selected?: string;
   lastFocus: Element | null = null;
   performing = false;
-  chestTimer?: number;
-  chest: { reward: RewardPresentation | null; revealed: boolean; charging?: boolean } | null = null;
+  readonly skills: SkillPanel;
+  readonly shop: ShopPanel;
+  readonly bag: BagPanel;
+  private readonly chestOverlay: ChestOverlay;
   constructor(
     view: GamifyView,
     { onLoad = async () => {}, onAction = async () => {} }: AdventureOptions = {},
@@ -74,7 +69,6 @@ export class AdventureView {
     this.onLoad = onLoad;
     this.onAction = onAction;
     this.page = 'home';
-    this.category = 'all';
     this.base = `/plugins/gamify-for-siyuan/assets/`;
     const identity = required(this.root, '.identity');
     const info = document.createElement('div');
@@ -151,6 +145,10 @@ export class AdventureView {
       }
     };
     document.addEventListener('keydown', this.keydown, true);
+    this.skills = new SkillPanel(this);
+    this.shop = new ShopPanel(this);
+    this.bag = new BagPanel(this);
+    this.chestOverlay = new ChestOverlay(this);
   }
   node<K extends keyof HTMLElementTagNameMap>(
     tag: K,
@@ -246,18 +244,7 @@ export class AdventureView {
       bar.setAttribute('aria-valuemin', '0');
       if (max !== null) bar.setAttribute('aria-valuemax', String(max));
     }
-    const skillSignature = JSON.stringify([
-      user.stats?.class,
-      user.stats?.lvl,
-      user.stats?.mp,
-      user.stats?.buffs?.streaks,
-      !!content,
-    ]);
-    if (skillSignature !== this.skillSignature) {
-      this.skillSignature = skillSignature;
-      this.renderSkills();
-    }
-    this.refreshSkillStates();
+    this.skills.update();
     const signature = JSON.stringify([
       user.stats,
       user.items,
@@ -269,229 +256,10 @@ export class AdventureView {
     ]);
     if (signature !== this.signature) {
       this.signature = signature;
-      this.renderShop();
-      this.renderBag();
+      this.shop.render();
+      this.bag.render();
     }
     this.text('.adventure-status', blocked);
-  }
-  skillSpells() {
-    return Object.values(this.content?.spells?.[this.user?.stats?.class || ''] || {}).filter(
-      (s): s is CatalogSkill & { key: string; lvl: number; mana: number } =>
-        typeof s.key === 'string' && typeof s.lvl === 'number' && typeof s.mana === 'number',
-    );
-  }
-  skillState(spell: CatalogSkill & { key: string; lvl: number; mana: number }) {
-    const reason = skillBlockReason(spell, this.user),
-      disabled = reason || this.blocked || (this.busy ? '正在处理，请稍候' : ''),
-      hint =
-        spell.target === 'task'
-          ? '需指定任务'
-          : !['self', 'party'].includes(spell.target || '')
-            ? '需选择目标'
-            : reason || '暂不可用';
-    return { disabled, hint };
-  }
-  refreshSkillStates() {
-    const spells = this.skillSpells();
-    for (const button of this.root.querySelectorAll<HTMLButtonElement>('[data-skill-key]')) {
-      const spell = spells.find((item) => item.key === button.dataset.skillKey);
-      if (!spell) continue;
-      const { disabled, hint } = this.skillState(spell),
-        wrapper = button.parentElement;
-      button.disabled = !!disabled;
-      button.setAttribute(
-        'aria-label',
-        `${spell.text}，${spell.mana} 法力${disabled ? '；' + disabled : ''}`,
-      );
-      if (!wrapper) continue;
-      wrapper.title = disabled || plainNotes(spell.notes);
-      const existing = wrapper.querySelector<HTMLElement>('.skill-unavailable');
-      if (disabled) {
-        if (existing) existing.textContent = hint;
-        else wrapper.append(this.node('small', 'skill-unavailable', hint));
-      } else existing?.remove();
-    }
-  }
-  renderSkills() {
-    const list = required(this.root, '.skills');
-    list.replaceChildren();
-    const spells = this.skillSpells();
-    if (!spells.length) {
-      list.append(
-        this.node(
-          'span',
-          'empty-copy',
-          this.content ? '等级 11 后解锁职业技能' : '打开面板后加载职业技能',
-        ),
-      );
-      return;
-    }
-    for (const spell of spells) {
-      const reason = skillBlockReason(spell, this.user),
-        wrapper = this.node('div', 'skill-wrapper');
-      wrapper.title = plainNotes(spell.notes);
-      const button = this.node(
-        'button',
-        `skill${reason === '法力不足' ? ' mana-low' : ''}${spell.key === 'frost' && this.user?.stats?.buffs?.streaks ? ' buff-active' : ''}`,
-      );
-      button.type = 'button';
-      button.dataset.skillKey = spell.key;
-      const icon = this.node('span', 'skill-icon');
-      icon.append(this.image(`shop_${spell.key}`));
-      icon.append(this.node('span', 'slot-glint'));
-      button.append(
-        icon,
-        this.node('span', '', spell.text),
-        this.node('small', '', `${spell.mana} MP`),
-      );
-      wrapper.append(button);
-      button.onclick = () => this.confirmSkill(spell);
-      list.append(wrapper);
-    }
-    this.refreshSkillStates();
-  }
-  confirmSkill(spell: CatalogSkill & { key: string; lvl: number; mana: number }) {
-    this.dialog(
-      spell.text || spell.key,
-      `${plainNotes(spell.notes)}\n消耗 ${spell.mana} 点法力${spell.target === 'party' ? '，作用于当前队伍' : ''}。`,
-      '确认施放',
-      async () => {
-        const result = await this.onAction('cast', spell.key);
-        if (this.view.destroyed) return result;
-        this.dismiss(true);
-        this.view.feedback(`${spell.text}已施放`, true);
-        return result;
-      },
-    );
-  }
-  renderShop() {
-    this.text('.shop-gold', `◉ ${Number(this.user?.stats?.gp || 0).toFixed(2)}`);
-    const list = required(this.root, '.products');
-    list.replaceChildren();
-    if (!this.shops || !this.content) {
-      this.text('.shop-state', '进入商店后读取官方商品');
-      return;
-    }
-    this.text('.shop-state', '商品与价格来自 Habitica · 宝石商品请在官方商店购买');
-    this.products = shopItems(
-      this.shops.market,
-      this.shops.gear,
-      this.shops.seasonal,
-      this.content,
-      this.user!,
-    );
-    for (const item of this.products) {
-      const card = this.node('button', 'product');
-      card.type = 'button';
-      const art = this.node('div', 'product-art');
-      art.append(this.image(item.image));
-      const info = this.node('div', 'product-info');
-      info.append(
-        this.node('b', '', item.name),
-        this.node(
-          'small',
-          '',
-          `${item.currency === 'gold' ? '◉' : '◆'} ${Number.isFinite(item.price) ? item.price : '—'}`,
-        ),
-        this.node('span', 'gap', purchaseBlockReason(item, this.user) || '可以购买'),
-      );
-      card.append(art, info);
-      card.onclick = () => this.confirmBuy(item);
-      list.append(card);
-    }
-  }
-  confirmBuy(item: ShopItem) {
-    const reason =
-      purchaseBlockReason(item, this.user) || this.blocked || (this.busy ? '正在处理，请稍候' : '');
-    this.dialog(
-      item.name,
-      `${item.notes}\n价格 ${item.price} ${item.currency === 'gold' ? '金币' : '宝石'}${item.kind === 'potion' ? '，购买后立即使用' : ''}。${reason ? '\n' + reason : ''}`,
-      reason || (item.kind === 'armoire' ? '购买并开启' : '确认购买'),
-      async () => {
-        const result = await this.onAction('buy', item.key);
-        if (this.view.destroyed) return;
-        this.dismiss(true);
-        if (item.kind === 'armoire') this.openChest(armoireReward(result || null, this.content));
-        else this.view.feedback(`${item.name}购买成功`, true);
-      },
-      !!reason,
-    );
-    if (item.currency !== 'gold') {
-      const link = this.node('a', 'official-shop-link', '前往 Habitica 官方商店 ↗');
-      link.href = 'https://habitica.com/shops/market';
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      required(this.overlay, '.adventure-sheet').append(link);
-    }
-  }
-  renderBag() {
-    const items = inventoryItems(this.user, this.content),
-      filtered = items.filter((i) => this.category === 'all' || i.category === this.category);
-    this.text('.bag-total', `${items.length} 种物品`);
-    const tabs = required(this.root, '.bag-tabs');
-    tabs.replaceChildren();
-    for (const [key, title] of [
-      ['all', '全部'],
-      ['gear', '装备'],
-      ['food', '食物'],
-      ['other', '蛋与药水'],
-      ['quest', '任务卷轴'],
-    ]) {
-      const b = this.node('button', '', title);
-      b.type = 'button';
-      b.setAttribute('aria-pressed', String(this.category === key));
-      b.onclick = () => {
-        this.category = key;
-        this.renderBag();
-        ([...tabs.children] as HTMLElement[]).find((n) => n.textContent === title)?.focus();
-      };
-      tabs.append(b);
-    }
-    const selected = filtered.find((i) => i.key === this.selected) || filtered[0];
-    this.selected = selected?.key;
-    const grid = required(this.root, '.bag-grid');
-    grid.replaceChildren();
-    for (const item of filtered) {
-      const b = this.node('button', `bag-slot${item === selected ? ' selected' : ''}`);
-      b.type = 'button';
-      b.title = item.name;
-      b.setAttribute(
-        'aria-label',
-        `${item.name}，数量 ${item.quantity}${item.equipped ? '，已装备' : ''}`,
-      );
-      b.setAttribute('aria-pressed', String(item === selected));
-      b.append(this.image(item.image), this.node('small', '', item.quantity));
-      if (item.equipped) b.append(this.node('i', 'equipped-dot'));
-      b.onclick = () => {
-        this.selected = item.key;
-        this.renderBag();
-        ([...grid.children] as HTMLElement[]).find((n) => n.title === item.name)?.focus();
-      };
-      grid.append(b);
-    }
-    for (let i = filtered.length; i < 12; i++) {
-      const empty = this.node('span', 'bag-slot empty', '◇');
-      empty.setAttribute('aria-hidden', 'true');
-      grid.append(empty);
-    }
-    const detail = required(this.root, '.bag-detail');
-    detail.replaceChildren();
-    if (!selected) {
-      detail.append(
-        this.node('p', '', this.content ? '这个分类暂时没有物品。' : '正在读取物品说明…'),
-      );
-      return;
-    }
-    const art = this.node('div', 'detail-art');
-    art.append(this.image(selected.image));
-    const info = this.node('div');
-    info.append(
-      this.node('div', 'detail-type', selected.equipped ? '已装备' : '持有物品'),
-      this.node('h3', '', selected.name),
-      this.node('p', '', selected.notes || '官方暂未提供物品说明'),
-      this.node('small', '', `持有数量 · ${selected.quantity}`),
-    );
-    detail.append(art, info);
   }
   dialog(
     title: string,
@@ -545,109 +313,29 @@ export class AdventureView {
   }
   dismiss(force = false) {
     if (this.performing && !force) return;
-    if (this.chest && !this.chest.revealed && !force) {
-      this.revealChest();
+    const chest = this.chestOverlay.chest;
+    if (chest && !chest.revealed && !force) {
+      this.chestOverlay.reveal();
       return;
     }
-    clearTimeout(this.chestTimer);
-    this.chest = null;
+    this.chestOverlay.reset();
     this.overlay.hidden = true;
     this.overlay.replaceChildren();
     this.lastFocus?.isConnected && (this.lastFocus as HTMLElement).focus();
   }
+  // Compatibility surface: verification tools and callers address the chest
+  // through the adventure view; the overlay owns the actual state.
+  get chest(): ChestState | null {
+    return this.chestOverlay.chest;
+  }
   openChest(reward: RewardPresentation | null) {
-    // The server result is already settled; this animation never generates a drop.
-    this.dialog('魔法宝箱', '', '', () => {}, true);
-    this.chest = { reward, revealed: false };
-    this.overlay.classList.add('chest-overlay');
-    const sheet = this.overlay.firstElementChild as HTMLElement;
-    sheet.className = 'sheet';
-    sheet.replaceChildren();
-    const opening = this.node('div', 'opening');
-    opening.innerHTML =
-      '<button class="skip" data-dismiss>跳过动画 ↗</button><div class="chest-kicker">THE ENCHANTED ARMOIRE</div><h3 id="adventure-dialog-title">魔法宝箱</h3><p>一份未知的惊喜，正在等待你。</p><div class="chest-stage"><div class="rays"></div><div class="chest-aura"></div><div class="halo"></div></div><button class="primary">开启宝箱</button><div class="burst"></div>';
-    required(opening, '.chest-stage').append(this.image('shop_armoire', 'chest-image'));
-    sheet.append(opening);
-    required(opening, '.primary').onclick = () => {
-      if (!this.chest || this.chest.charging) return;
-      this.chest.charging = true;
-      opening.classList.add('charging');
-      this.chestSound(false);
-      required(opening, '.primary').disabled = true;
-      this.chestTimer = window.setTimeout(
-        () => this.revealChest(),
-        matchMedia('(prefers-reduced-motion: reduce)').matches ? 50 : 2400,
-      );
-    };
-    required(opening, '.primary').focus();
+    this.chestOverlay.open(reward);
   }
   revealChest() {
-    if (!this.chest || this.chest.revealed) return;
-    clearTimeout(this.chestTimer);
-    this.chest.revealed = true;
-    const reward = this.chest.reward,
-      opening = optional(this.overlay, '.opening');
-    if (!opening) return;
-    opening.classList.remove('charging');
-    opening.classList.add('revealed');
-    opening.replaceChildren();
-    const label = this.node(
-      'div',
-      'chest-kicker',
-      reward
-        ? `YOU DISCOVERED · ${{ gear: '装备', food: '食物', experience: '经验' }[reward.type]}`
-        : 'HABITICA',
-    );
-    const stage = this.node('div', 'chest-stage');
-    for (const cls of ['rays', 'chest-aura', 'halo']) stage.append(this.node('div', cls));
-    for (let i = 0; i < 22; i++) {
-      const mote = this.node('i', 'mote');
-      mote.style.setProperty('--angle', `${i * 16.36}deg`);
-      mote.style.setProperty('--delay', `${(i % 4) * 0.04}s`);
-      stage.append(mote);
-    }
-    stage.append(
-      reward?.image
-        ? this.image(reward.image, 'reward-art')
-        : this.node('span', 'reward-experience', '✦'),
-    );
-    const heading = this.node('h3', '', reward?.name || '宝箱已开启');
-    heading.id = 'adventure-dialog-title';
-    const notes = this.node(
-      'p',
-      '',
-      reward?.notes || 'Habitica 已完成购买，请在背包或官方账号中查看结果。',
-    );
-    const done = this.node('button', 'primary', '收下奖励');
-    done.type = 'button';
-    done.dataset.dismiss = '';
-    opening.append(label, stage, heading, notes, done, this.node('div', 'burst'));
-    this.chestSound(true);
-    done.focus();
-  }
-  chestSound(reveal: boolean) {
-    if (!this.view.soundEnabled || !this.view.audio || this.view.audio.state !== 'running') return;
-    const audio = this.view.audio;
-    (reveal
-      ? [523.25, 659.25, 783.99, 1046.5, 1318.5]
-      : [130.81, 196, 261.63, 392, 523.25]
-    ).forEach((f, i) => {
-      const tone = audio.createOscillator(),
-        gain = audio.createGain(),
-        start = audio.currentTime + i * (reveal ? 0.09 : 0.35);
-      tone.type = 'sine';
-      tone.frequency.value = f;
-      tone.connect(gain);
-      gain.connect(audio.destination);
-      gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(0.035, start + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + 1.1);
-      tone.start(start);
-      tone.stop(start + 1.2);
-    });
+    this.chestOverlay.reveal();
   }
   destroy() {
-    clearTimeout(this.chestTimer);
+    this.chestOverlay.destroy();
     document.removeEventListener('keydown', this.keydown, true);
   }
 }
