@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>余晖 · 奖励配色预览</title>
+<style>
+:root{color-scheme:dark;--bg:#171b1c;--panel:#202626;--paper:#1c2222;--text:#e2e9e5;--muted:#8a9a92;--line:#ffffff12;--mint:#b5f0d8;--soft:#ffffff05}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.7 system-ui,"Microsoft YaHei",sans-serif}button,input{font:inherit}button{cursor:pointer;color:var(--text);border:1px solid var(--line);background:var(--soft);border-radius:9px;padding:9px 15px}button:hover{border-color:var(--mint)}button:focus-visible,input:focus-visible{outline:2px solid var(--mint);outline-offset:4px}
+main{max-width:1020px;margin:auto;padding:38px 40px 28px}.top{display:flex;justify-content:space-between;align-items:center}.brand{font-size:12px;letter-spacing:3px;color:var(--muted)}.brand b{color:var(--mint);font-size:21px;margin-right:10px}.quiet{font-size:12px;color:var(--muted)}
+h1{font-size:clamp(27px,3.6vw,40px);font-weight:450;letter-spacing:1px;line-height:1.4;margin:42px 0 10px}.intro{color:var(--muted);margin:0 0 30px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:22px;align-items:start}.paper{background:var(--paper);border:1px solid var(--line);border-radius:16px;min-height:380px;overflow:hidden}.paper-top{display:flex;justify-content:space-between;padding:16px 27px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:1px;color:var(--muted)}.dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--mint);margin-right:8px}.document{padding:32px 36px 24px}.doc-title{font-size:24px;line-height:1.5;font-weight:450;margin:0 0 22px}.protyle-wysiwyg{font-size:16px;line-height:2.05;min-height:200px;outline:none;caret-color:var(--mint);white-space:pre-wrap;overflow-wrap:anywhere}.paper-foot{padding:0 36px 22px;color:var(--muted);font-size:11px}
+.controls{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:25px 23px}.section-label{font-size:10px;letter-spacing:2px;color:var(--muted)}.actions{display:grid;gap:9px;margin:14px 0}.actions button{text-align:left;font-size:12px;padding:11px 14px}.actions small{display:block;color:var(--muted);font-size:10px;margin-top:2px}.status{font-size:11px;color:var(--mint);min-height:52px;margin:12px 0 0;line-height:1.7}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:16px;font-size:11px;color:var(--muted)}.swatch{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}.swatch.green{background:#b5f0d8}.swatch.gold{background:#ffe3a0}.swatch.purple{background:#d5c1ff}
+footer{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:26px;font-size:11px;color:var(--muted)}details{margin-top:18px;font-size:11px;color:var(--muted)}summary{cursor:pointer}details p{max-width:720px}
+@media(max-width:860px){main{padding:26px 18px}.layout{grid-template-columns:1fr}.paper{min-height:0}}
+</style>
+</head>
+<body><main>
+<div class="top"><div class="brand"><b>✦</b> GAMIFY / REWARD TINT</div><div class="quiet">交互草稿 · 独立预览 · 不修改思源插件</div></div>
+<h1>让奖励的颜色，说出它的来源。</h1>
+<p class="intro">绿=编写（输入与删除同色，不评判方向）· 金=新进展的奖励 · 紫=照料旧文档的奖励。点击右侧按钮对比两种余晖，或在左侧随意写删感受基色。</p>
+<div class="layout">
+  <section class="paper" aria-label="书写体验区">
+    <div class="paper-top"><span><i class="dot"></i>一页留给今天的笔记</span><span>光标余晖配色</span></div>
+    <div class="document"><h2 class="doc-title">缓慢，也在向前。</h2>
+      <div class="protyle-wysiwyg" contenteditable="true" role="textbox" aria-label="试着在这里输入或删除文字" aria-multiline="true" spellcheck="false"><div data-node-id="20261127000000-aaaaaaa" id="writing">不必急着完成什么。
+把刚刚浮现的念头，留在这里。
+
+删改也是写作的一部分，光不会因此变色。</div></div>
+    </div>
+    <div class="paper-foot">点击文字开始 · 输入或删除，光都是同一种绿</div>
+  </section>
+  <aside class="controls" aria-label="预览控制">
+    <div class="section-label">对比两种奖励余晖</div>
+    <div class="actions">
+      <button id="gold">普通奖励 · 金色余晖<small>新进展（TODO / 新内容编辑）</small></button>
+      <button id="purple">旧文档奖励 · 紫色余晖<small>照料已有笔记（维护类奖励）</small></button>
+      <button id="maintenance">对照 · 既有维护反馈<small>紫色一闪，现行插件行为</small></button>
+    </div>
+    <p class="status" id="status" role="status">先点"旧文档奖励"，再点"普通奖励"，对比余晖颜色。</p>
+    <div class="legend"><span><i class="swatch green"></i>编写</span><span><i class="swatch gold"></i>新进展</span><span><i class="swatch purple"></i>旧文档</span></div>
+  </aside>
+</div>
+<footer><span>金币飘字与吐司保持金色（金币的本色）；变化的是光标余晖。</span><span>离线可用 · 不连接 Habitica · 不保存输入内容</span></footer>
+<details><summary>方案说明</summary>
+<p>候选改动：奖励到账时按来源选择余晖色——维护类（旧文档）奖励走既有紫色通道并延长至约 1.8 秒，其余奖励保持金色。本预览通过覆写 <code>caretFeedback</code> 把紫色余晖接入跟随器现有的颜色计算（<code>maintenanceUntil</code> 项），所见即插件小改后的效果。删除不另染色：输入与删除共用绿色基色，与"插入删除同权"的既有规则一致。红色方案已否决（惩罚感、高频干扰、红绿色盲）。本页所有代码仅存在于 dev 预览，插件源码未改动。</p>
+</details>
+</main>
+<script>/* PREVIEW_RUNTIME */</script></body></html>

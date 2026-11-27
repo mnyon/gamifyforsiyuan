@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>回应 · 场景反馈预览</title>
+<style>
+:root{color-scheme:dark;--bg:#171b1c;--panel:#202626;--paper:#1c2222;--text:#e2e9e5;--muted:#8a9a92;--line:#ffffff12;--mint:#b5f0d8;--soft:#ffffff05}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.7 system-ui,"Microsoft YaHei",sans-serif}button,input{font:inherit}button{cursor:pointer;color:var(--text);border:1px solid var(--line);background:var(--soft);border-radius:9px;padding:9px 15px}button:hover{border-color:var(--mint)}button:focus-visible,input:focus-visible{outline:2px solid var(--mint);outline-offset:4px}
+main{max-width:1080px;margin:auto;padding:38px 40px 28px}.top{display:flex;justify-content:space-between;align-items:center}.brand{font-size:12px;letter-spacing:3px;color:var(--muted)}.brand b{color:var(--mint);font-size:21px;margin-right:10px}.quiet{font-size:12px;color:var(--muted)}
+h1{font-size:clamp(27px,3.6vw,40px);font-weight:450;letter-spacing:1px;line-height:1.4;margin:42px 0 10px}.intro{color:var(--muted);margin:0 0 30px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:22px;align-items:start}.left{display:grid;gap:18px}.stage-panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px 20px;display:grid;place-items:center}
+.paper{background:var(--paper);border:1px solid var(--line);border-radius:16px;overflow:hidden}.paper-top{padding:13px 24px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:1px;color:var(--muted)}.dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--mint);margin-right:8px}.protyle-wysiwyg{padding:20px 24px;font-size:15px;line-height:2;min-height:110px;outline:none;caret-color:var(--mint);white-space:pre-wrap;overflow-wrap:anywhere}
+.controls{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:25px 23px}.section-label{font-size:10px;letter-spacing:2px;color:var(--muted)}.meter-title{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin:14px 0 6px}.meter-title output{color:var(--mint);font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:var(--mint)}.caption{font-size:10px;color:var(--muted);margin:6px 0 0;line-height:1.7}
+.actions{display:grid;gap:9px;margin:16px 0}.actions button{text-align:left;font-size:12px;padding:11px 14px}.actions small{display:block;color:var(--muted);font-size:10px;margin-top:2px}.status{font-size:11px;color:var(--mint);min-height:52px;margin:12px 0 0;line-height:1.7}
+footer{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:26px;font-size:11px;color:var(--muted)}details{margin-top:18px;font-size:11px;color:var(--muted)}summary{cursor:pointer}details p{max-width:760px}
+@media(max-width:900px){main{padding:26px 18px}.layout{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main data-type="gamify-for-siyuancompanion">
+<div class="top"><div class="brand"><b>✦</b> GAMIFY / SCENE FEEDBACK</div><div class="quiet">交互草稿 · 独立预览 · 不修改思源插件</div></div>
+<h1>让场景，回应你的投入。</h1>
+<p class="intro">三个候选反馈：奖励时角色小跳与武器微扬；基座与轨道随进度发亮；持续写作后偶发流星或月晕。全部沿用现有夜色紫调，克制、稀有、不吵闹。</p>
+<div class="layout">
+  <div class="left">
+    <section class="stage-panel" aria-label="角色卡片预览区"><div id="stage"></div></section>
+    <section class="paper" aria-label="书写区">
+      <div class="paper-top"><i class="dot"></i>在这里持续写作，积累进度与"活跃时长"</div>
+      <div class="protyle-wysiwyg" contenteditable="true" role="textbox" aria-label="试着在这里输入文字" aria-multiline="true" spellcheck="false"><div data-node-id="20261127000001-ccccccc">把刚刚浮现的念头，留在这里。
+写得越久，脚下的光越亮。</div></div>
+    </section>
+  </div>
+  <aside class="controls" aria-label="预览控制">
+    <div class="section-label">进度氛围</div>
+    <div class="meter-title"><label for="progress">靠近下一次奖励</label><output id="percent" for="progress">20%</output></div>
+    <input id="progress" type="range" min="0" max="100" value="20">
+    <p class="caption">拖动或在左侧写作：基座光晕、轨道环微光与脚下柔光随进度增强，0% 时与现行插件完全一致。</p>
+    <div class="actions">
+      <button id="reward">模拟奖励到账<small>角色小跳 · 武器微扬 · 宠物弹起</small></button>
+      <button id="meteor">预览 · 流星<small>正式规则：持续写作 60s 后随机 15–60s 出现</small></button>
+      <button id="moon">预览 · 月晕<small>乳白光晕 + 外环浮现，朦胧绽放 3.8s</small></button>
+    </div>
+    <p class="status" id="status" role="status">先拖动进度滑杆看脚下光变化，再点"模拟奖励到账"。</p>
+  </aside>
+</div>
+<footer><span>角色素材来自 Habitica CDN，需联网；离线时显示占位符。</span><span>不连接 Habitica · 不保存输入内容</span></footer>
+<details><summary>方案说明</summary>
+<p><b>角色欢呼</b>：用独立 translate/rotate CSS 属性叠加在角色定位 transform 之上，无需包裹层；武器绕握持点微扬，宠物延迟 50ms 弹起；900ms 节流防止离线队列补发时叠跳。<b>进度氛围</b>：复用光标系统已缓动的 approach 值驱动场景 CSS 变量，基座/轨道的基色与插件逐位一致，0 进度时零差异。<b>彩蛋</b>：活跃写作时长满 60 秒后"上膛"，随机 15–60 秒后触发流星（70%）或月晕（30%），触发后清空累计并冷却 2 分钟——稀有、不可预期、不可刷；页面隐藏或系统减少动态效果时不触发。月晕为三层结构：比月亮大数倍的乳白弥散光斑（blur 朦胧化）、延迟浮现的外缘光环、月亮本体增亮，暖月光渐隐入夜色紫调。预览按钮仅供评估，正式版本无此入口。本页所有代码仅存在于 dev 预览，插件源码未改动。</p>
+</details>
+</main>
+<script>/* PREVIEW_RUNTIME */</script></body></html>

@@ -7,6 +7,8 @@ for (const [directory, source, name] of [
   ['dev/note-world/legacy/canvas', 'legacyTerrain.ts', 'page-terrain'],
   ['dev/avatar-idle', 'avatarIdle.ts', 'avatar-idle'],
   ['dev/equip-studio', 'equipStudio.ts', 'equip-studio'],
+  ['dev/reward-tint', 'rewardTint.ts', 'reward-tint'],
+  ['dev/scene-feedback', 'sceneFeedback.ts', 'scene-feedback'],
 ]) {
   const result = await build({
     entryPoints: [`${directory}/${source}`],
