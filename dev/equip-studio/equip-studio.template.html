@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>试衣间 · 装备交互预览</title>
+<style>
+:root{color-scheme:dark;--bg:#171b1c;--panel:#202626;--text:#e2e9e5;--muted:#8a9a92;--line:#ffffff12;--mint:#b5f0d8;--soft:#ffffff05}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.7 system-ui,"Microsoft YaHei",sans-serif}button,input,select{font:inherit}button{cursor:pointer;color:var(--text);border:1px solid var(--line);background:var(--soft);border-radius:9px;padding:9px 15px}button:hover:not(:disabled){border-color:var(--mint)}button:disabled{cursor:wait;opacity:.55}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--mint);outline-offset:4px}
+main{max-width:1120px;margin:auto;padding:38px 40px 28px}.top{display:flex;justify-content:space-between;align-items:center}.brand{font-size:12px;letter-spacing:3px;color:var(--muted)}.brand b{color:var(--mint);font-size:21px;margin-right:10px}.quiet{font-size:12px;color:var(--muted)}
+h1{font-size:clamp(27px,3.6vw,40px);font-weight:450;letter-spacing:1px;line-height:1.4;margin:42px 0 10px}.intro{color:var(--muted);margin:0 0 30px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,400px);gap:22px;align-items:start}.stage-panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:34px 24px 28px;display:grid;place-items:center}
+footer{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:26px;font-size:11px;color:var(--muted)}details{margin-top:18px;font-size:11px;color:var(--muted)}summary{cursor:pointer}details p{max-width:760px}details a{color:var(--mint);text-decoration:none}
+@media(max-width:900px){main{padding:26px 18px}.layout{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main>
+<div class="top"><div class="brand"><b>⚔</b> GAMIFY / EQUIP STUDIO</div><div class="quiet">交互草稿 · 独立预览 · 不修改思源插件 · 不请求真实账户</div></div>
+<h1>穿上一件装备，看看角色如何回应。</h1>
+<p class="intro">背包选择 → 穿戴/卸下 → Avatar 即时重绘的完整闭环。内置模拟网关，可演练"明确拒绝"与"结果不确定→暂停→人工核对"的安全语义。</p>
+<div class="layout">
+  <section class="stage-panel" aria-label="角色与当前装备"><div id="stage"></div></section>
+  <aside aria-label="背包与模拟控制">
+    <div class="bag-panel">
+      <div class="bag-tabs" id="bag-tabs" role="group" aria-label="装备分类"></div>
+      <div class="bag-grid" id="bag-grid"></div>
+      <div class="bag-detail" id="bag-detail" aria-live="polite"></div>
+      <div class="sim-row"><label for="sim-mode">模拟网关结果</label><select id="sim-mode"><option value="ok">正常成功</option><option value="reject">明确拒绝</option><option value="uncertain">结果不确定</option></select><span class="state-badge" id="state-badge">空闲</span></div>
+      <p class="equip-status" id="equip-status" role="status"></p>
+      <button id="ack" hidden>我已核对，解除暂停（模拟）</button>
+    </div>
+  </aside>
+</div>
+<footer><span>角色与物品素材来自 Habitica CDN，需联网加载；离线时显示占位符。</span><span>虚构账户 · 本地模拟请求 · 不保存任何数据</span></footer>
+<details><summary>方案说明</summary>
+<p>本原型复用插件真实的 <code>inventoryItems</code> / <code>avatarLayers</code> / <code>assetURL</code 投影与背包视觉语言，装备语义对齐 Habitica 的 <code>POST /user/equip/{type}/{key}</code>（战斗装备槽：weapon / shield / head / armor）。模拟网关演练三种结果：成功→本地变更+即时重绘；明确拒绝→清除标记可重试；结果不确定→本地状态不变、暂停后续操作、绝不自动重发，需人工核对解除——与插件 <code>executeAction</code> 的持久化安全契约一致。未来接入真实请求时，只需把模拟网关换成客户端 equip 方法并复用同一工作流。装扮（costume）槽位与 headAccessory / eyewear / back 等扩展槽不在本原型范围。本页所有代码仅存在于 dev 预览，插件源码未改动。素材与文本归属见 <a href="https://github.com/mnyon/gamifyforsiyuan/blob/main/THIRD-PARTY-NOTICES.md" target="_blank" rel="noopener">THIRD-PARTY-NOTICES</a>。</p>
+</details>
+</main>
+<script>/* PREVIEW_RUNTIME */</script></body></html>

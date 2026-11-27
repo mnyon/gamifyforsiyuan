@@ -5,6 +5,8 @@ fs.mkdirSync('dist/previews', { recursive: true });
 for (const [directory, source, name] of [
   ['dev/caret-playground', 'caretPlayground.ts', 'caret-playground'],
   ['dev/note-world/legacy/canvas', 'legacyTerrain.ts', 'page-terrain'],
+  ['dev/avatar-idle', 'avatarIdle.ts', 'avatar-idle'],
+  ['dev/equip-studio', 'equipStudio.ts', 'equip-studio'],
 ]) {
   const result = await build({
     entryPoints: [`${directory}/${source}`],

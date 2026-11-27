@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>呼吸 · 角色待机预览</title>
+<style>
+:root{color-scheme:dark;--bg:#171b1c;--panel:#202626;--text:#e2e9e5;--muted:#8a9a92;--line:#ffffff12;--mint:#b5f0d8;--soft:#ffffff05}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.7 system-ui,"Microsoft YaHei",sans-serif}button,input{font:inherit}button{cursor:pointer;color:var(--text);border:1px solid var(--line);background:var(--soft);border-radius:9px;padding:9px 15px}button:hover{border-color:var(--mint)}button:focus-visible,input:focus-visible{outline:2px solid var(--mint);outline-offset:4px}button[aria-pressed=true]{background:#a8e8c91a;border-color:#a8e8c94d}
+main{max-width:1020px;margin:auto;padding:38px 40px 28px}.top{display:flex;justify-content:space-between;align-items:center}.brand{font-size:12px;letter-spacing:3px;color:var(--muted)}.brand b{color:var(--mint);font-size:21px;margin-right:10px}.quiet{font-size:12px;color:var(--muted)}
+h1{font-size:clamp(27px,3.6vw,40px);font-weight:450;letter-spacing:1px;line-height:1.4;margin:42px 0 10px}.intro{color:var(--muted);margin:0 0 30px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:22px;align-items:start}.stage-panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:34px 24px 28px;min-height:420px;display:grid;place-items:center}
+.controls{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:25px 23px}.section-label{font-size:10px;letter-spacing:2px;color:var(--muted)}.presets{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 6px}.presets button{font-size:12px;padding:8px 6px}.note{font-size:11px;color:var(--muted);min-height:34px;margin:6px 0 0}
+.divider{border-top:1px solid var(--line);margin:18px 0}.meter-title{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin:14px 0 6px}.meter-title output{color:var(--mint);font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:var(--mint)}.caption{font-size:10px;color:var(--muted);margin:6px 0 0;line-height:1.7}
+#idle-toggle,#detail-toggle{width:100%;margin-top:10px;font-size:12px}.motion-note{font-size:11px;color:#eac787;margin:12px 0 0;min-height:18px}
+.fx{display:grid;gap:7px;margin-top:12px}.fx-option{display:grid;grid-template-columns:18px 1fr;gap:8px;align-items:start;padding:8px;border:1px solid var(--line);border-radius:8px}.fx-option input{accent-color:var(--mint);margin-top:4px}.fx-option strong{display:block;font-size:12px;font-weight:500}.fx-option small{display:block;color:var(--muted);font-size:10px;line-height:1.5}
+footer{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:26px;font-size:11px;color:var(--muted)}details{margin-top:18px;font-size:11px;color:var(--muted)}summary{cursor:pointer}details p{max-width:720px}details a{color:var(--mint);text-decoration:none}
+@media(max-width:860px){main{padding:26px 18px}.layout{grid-template-columns:1fr}.stage-panel{min-height:0}}
+</style>
+</head>
+<body><main>
+<div class="top"><div class="brand"><b>✦</b> GAMIFY / IDLE STUDY</div><div class="quiet">交互草稿 · 独立预览 · 不修改思源插件</div></div>
+<h1>让角色在待机时，轻轻呼吸。</h1>
+<p class="intro">同一套场景与图层渲染，叠加候选的待机动画。切换角色状态、对比静止基线与分层随动、调节幅度与节奏，再决定是否进入插件。</p>
+<div class="layout">
+  <section class="stage-panel" aria-label="角色待机预览区"><div id="stage"></div></section>
+  <aside class="controls" aria-label="预览控制">
+    <div class="section-label">角色状态（虚构账户）</div>
+    <div class="presets" id="presets"></div>
+    <p class="note" id="preset-note" role="status"></p>
+    <div class="divider"></div>
+    <div class="section-label">候选动画参数</div>
+    <div class="meter-title"><label for="amp">浮动幅度</label><output id="amp-out" for="amp">1.5px</output></div>
+    <input id="amp" type="range" min="0" max="3" step="0.1" value="1.5">
+    <div class="meter-title"><label for="period">呼吸周期</label><output id="period-out" for="period">3.2s</output></div>
+    <input id="period" type="range" min="1.5" max="5" step="0.1" value="3.2">
+    <p class="caption">宠物周期约为角色的 0.84 倍并错开相位；武器、盾牌、头发/头饰、披风以滞后相位小幅摆动（跟随动作），支点近似握持/佩戴位置。睡眠状态始终静止。参数仅用于预览。</p>
+    <button id="idle-toggle" aria-pressed="true">待机动画：开</button>
+    <button id="detail-toggle" aria-pressed="true">武器/细节随动：开</button>
+    <div class="divider"></div>
+    <div class="section-label">视觉增强（可叠加，逐项开关）</div>
+    <div class="fx" id="fx"></div>
+    <p class="motion-note" id="motion-note" role="status"></p>
+  </aside>
+</div>
+<footer><span>角色素材来自 Habitica CDN，需联网加载；离线时显示占位符 ✧。</span><span>不连接 Habitica 账户 · 不保存任何输入</span></footer>
+<details><summary>方案说明</summary>
+<p>候选实现分三层。<b>角色</b>：<code>.avatar-body</code> 包裹层承载呼吸（避免与插件定位 transform 冲突），<code>.avatar-fidget</code> 内层承载偶发动作；武器/盾牌/头发以滞后相位小幅摆动形成跟随感；睡眠时身体静止、zzz 缓慢上浮。<b>材质与落地</b>：高光用同一张素材 PNG 作 <code>mask-image</code>，只扫过装备像素；基座影子与身体反相呼吸，产生重量感。<b>氛围与纵深</b>：星光/轨道/浮尘为纯 CSS 循环；指针视差用独立 <code>translate</code> 属性叠加，不触碰定位 transform。系统"减少动态效果"时全部停用。本页所有动画代码仅存在于 dev 预览，插件源码未改动。素材与文本归属见 <a href="https://github.com/mnyon/gamifyforsiyuan/blob/main/THIRD-PARTY-NOTICES.md" target="_blank" rel="noopener">THIRD-PARTY-NOTICES</a>。</p>
+</details>
+</main>
+<script>/* PREVIEW_RUNTIME */</script></body></html>
