@@ -31,6 +31,8 @@ export class HabiticaClient implements HabiticaRewardClient, HabiticaCompanionCl
   now: () => number;
   storage: KeyValueStore | null;
   cache: Map<string, CacheEntry>;
+  /** Catalog timestamps already persisted per locale, so cache hits stay read-only. */
+  contentSaved: Map<string, number>;
   reads: Map<string, Promise<unknown>>;
   blockedUntil: number;
   failures: number;
@@ -52,6 +54,7 @@ export class HabiticaClient implements HabiticaRewardClient, HabiticaCompanionCl
     this.now = now;
     this.storage = storage;
     this.cache = new Map();
+    this.contentSaved = new Map();
     this.reads = new Map();
     this.blockedUntil = 0;
     this.failures = 0;
@@ -161,24 +164,33 @@ export class HabiticaClient implements HabiticaRewardClient, HabiticaCompanionCl
           Number.isFinite(saved.at) &&
           schema.object(saved.value).spells &&
           this.now() - saved.at < 86400000
-        )
+        ) {
           this.cache.set(path, { at: saved.at, value: schema.content(saved.value) });
+          this.contentSaved.set(locale, saved.at);
+        }
       } catch {
         /* Cache is optional. */
       }
     }
     const value = await this.read(path, 86400000, schema.content);
-    try {
-      const { spells, gear, food, eggs, hatchingPotions, quests, potion, armoire } = value;
-      this.storage?.setItem(
-        key,
-        JSON.stringify({
-          at: this.cache.get(path)!.at,
-          value: { spells, gear, food, eggs, hatchingPotions, quests, potion, armoire },
-        }),
-      );
-    } catch {
-      /* Full or unavailable local storage must not block browsing. */
+    const at = this.cache.get(path)?.at || this.now();
+    // Re-serialising the whole catalog on every cache hit costs time and can
+    // fill the storage quota; only a freshly downloaded copy needs persisting.
+    // The timestamp is marked first so a failed write is not retried per call.
+    if (this.storage && this.contentSaved.get(locale) !== at) {
+      this.contentSaved.set(locale, at);
+      try {
+        const { spells, gear, food, eggs, hatchingPotions, quests, potion, armoire } = value;
+        this.storage.setItem(
+          key,
+          JSON.stringify({
+            at,
+            value: { spells, gear, food, eggs, hatchingPotions, quests, potion, armoire },
+          }),
+        );
+      } catch {
+        /* Full or unavailable local storage must not block browsing. */
+      }
     }
     return value;
   }

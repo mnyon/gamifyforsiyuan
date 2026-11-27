@@ -185,6 +185,34 @@ test('content cache is persisted without credentials and shared across client in
   await first.shop('market');
   assert.equal(calls, 3);
 });
+test('a cached catalog is never rewritten to local storage', async () => {
+  const memory = new Map<string, string>();
+  let writes = 0,
+    calls = 0;
+  const store = {
+      getItem: (k: string) => memory.get(k) || null,
+      setItem: (k: string, v: string) => {
+        writes++;
+        memory.set(k, v);
+      },
+    },
+    fetcher = async () => {
+      calls++;
+      return ok({ spells: { rogue: {} }, gear: {} });
+    };
+  const client = new HabiticaClient({ token: 't' }, stubFetch(fetcher), () => 1000, store);
+  await client.content('zh');
+  assert.equal(writes, 1);
+  await client.content('zh');
+  await client.content('zh');
+  assert.equal(writes, 1);
+  assert.equal(calls, 1);
+  // A second instance hydrating from disk must stay read-only too.
+  const fresh = new HabiticaClient({}, stubFetch(fetcher), () => 2000, store);
+  await fresh.content('zh');
+  assert.equal(writes, 1);
+  assert.equal(calls, 1);
+});
 test('rate limits respect Retry-After without an automatic retry or repeated network traffic', async () => {
   let now = 0,
     count = 0;

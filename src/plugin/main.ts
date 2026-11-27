@@ -521,6 +521,7 @@ export default class GamifyForSiYuan extends Plugin {
       this.user = user;
       this.content = null;
       this.shops = null;
+      this.warmAdventure();
       this.adventureUncertain = new LocalActionJournal(this.storeKey, value.userId).hasPending()
         ? 'pending'
         : '';
@@ -818,25 +819,56 @@ export default class GamifyForSiYuan extends Plugin {
 
   async loadAdventure(page: AdventurePage = 'home') {
     if (this.testMode || this.disposed || !this.client) return;
-    const client = this.client;
-    // Every page shares one user snapshot; repeated openings coalesce and reuse it.
-    const [user, content] = await Promise.all([
-      client.user(),
-      client.content(this.user?.preferences?.language || 'zh'),
-    ]);
-    if (this.disposed || client !== this.client) return;
-    this.user = user;
-    this.content = content;
-    if (page === 'shop') {
-      const [market, gear, seasonal] = await Promise.all([
-        client.shop('market'),
-        client.shop('market-gear'),
-        client.shop('seasonal'),
-      ]);
+    const client = this.client,
+      locale = this.user?.preferences?.language || 'zh';
+    // Content and the user snapshot arrive independently: the catalog is often
+    // already on disk, so paint skills before /user has answered.
+    let failure: unknown;
+    const keep = (error: unknown) => {
+      failure ??= error;
+    };
+    const content = client.content(locale).then((value) => {
       if (this.disposed || client !== this.client) return;
-      this.shops = { market, gear, seasonal };
-    }
-    this.render();
+      this.content = value;
+      this.render();
+    }, keep);
+    const user = client.user().then((value) => {
+      if (this.disposed || client !== this.client) return;
+      this.user = value;
+      this.render();
+    }, keep);
+    await Promise.all([content, user]);
+    if (this.disposed || client !== this.client) return;
+    if (page === 'shop')
+      try {
+        const [market, gear, seasonal] = await Promise.all([
+          client.shop('market'),
+          client.shop('market-gear'),
+          client.shop('seasonal'),
+        ]);
+        if (this.disposed || client !== this.client) return;
+        this.shops = { market, gear, seasonal };
+        this.render();
+      } catch (error) {
+        keep(error);
+      }
+    if (failure) throw failure;
+  }
+  /** Prefetch the catalog after connecting so the skill list is ready when opened. */
+  warmAdventure() {
+    if (this.testMode || this.disposed || !this.client || this.content) return;
+    const client = this.client,
+      locale = this.user?.preferences?.language || 'zh';
+    client.content(locale).then(
+      (content) => {
+        if (this.disposed || client !== this.client || this.content) return;
+        this.content = content;
+        this.render();
+      },
+      () => {
+        /* Panels retry on their own; a failed warm-up is not user-visible. */
+      },
+    );
   }
   companionPorts(client: HabiticaClient): ExecuteActionPorts {
     const account = this.credentials.userId;

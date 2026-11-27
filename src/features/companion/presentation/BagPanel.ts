@@ -40,6 +40,7 @@ export class BagPanel {
       const b = host.node('button', `bag-slot${item === selected ? ' selected' : ''}`);
       b.type = 'button';
       b.title = item.name;
+      b.dataset.key = item.key;
       b.setAttribute(
         'aria-label',
         `${item.name}，数量 ${item.quantity}${item.equipped ? '，已装备' : ''}`,
@@ -47,11 +48,7 @@ export class BagPanel {
       b.setAttribute('aria-pressed', String(item === selected));
       b.append(host.image(item.image), host.node('small', '', item.quantity));
       if (item.equipped) b.append(host.node('i', 'equipped-dot'));
-      b.onclick = () => {
-        this.selected = item.key;
-        this.render();
-        ([...grid.children] as HTMLElement[]).find((n) => n.title === item.name)?.focus();
-      };
+      b.onclick = () => this.select(item, grid);
       grid.append(b);
     }
     for (let i = filtered.length; i < 12; i++) {
@@ -59,6 +56,21 @@ export class BagPanel {
       empty.setAttribute('aria-hidden', 'true');
       grid.append(empty);
     }
+    this.detail(selected);
+  }
+  /** Selection only repaints the detail: rebuilding the grid would refetch art. */
+  private select(item: InventoryItem, grid: HTMLElement) {
+    this.selected = item.key;
+    for (const slot of grid.querySelectorAll<HTMLElement>('button.bag-slot')) {
+      const current = slot.dataset.key === item.key;
+      slot.classList.toggle('selected', current);
+      slot.setAttribute('aria-pressed', String(current));
+      if (current) slot.focus();
+    }
+    this.detail(item);
+  }
+  private detail(selected?: InventoryItem) {
+    const host = this.host;
     const detail = required(host.root, '.bag-detail');
     detail.replaceChildren();
     if (!selected) {

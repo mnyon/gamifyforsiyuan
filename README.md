@@ -15,7 +15,7 @@ Your character, mount and pet travel together, with health, experience and mana 
 
 ![Character, companions and class skills](images/05-adventure.png)
 
-Browse your inventory and find your next reward in the traveler’s shop. Inventory is read-only. Availability and prices come from Habitica; gem purchases open in the official shop.
+Browse your inventory, equip or unequip battle gear, and find your next reward in the traveler’s shop. Availability and prices come from Habitica; gem purchases open in the official shop.
 
 ![Adventure inventory](images/06-backpack.png)
 
@@ -25,7 +25,7 @@ Give each surprise its moment. Equipment, food and experience from the Enchanted
 
 ![Enchanted Armoire reveal](images/08-armoire.png)
 
-The character and inventory share cached data; static content is reused without frequent background polling. Screenshots use fictional account data.
+The catalog is prefetched after connecting; the character and inventory share cached data, so panels open without re-downloading and no background polling is needed. Screenshots use fictional account data.
 
 [Documentation](docs/Document.md)
 

@@ -165,9 +165,23 @@ export class AdventureView {
     img.alt = '';
     img.draggable = false;
     img.loading = 'lazy';
-    img.src = assetURL(name);
+    img.decoding = 'async';
+    const src = assetURL(name);
+    img.src = src;
+    // Remote art occasionally drops the first request on slow links; retry once
+    // with a distinct URL so the browser does not reuse the failed response.
     img.onerror = () => {
+      if (img.dataset.retried) {
+        img.hidden = true;
+        return;
+      }
+      img.dataset.retried = '1';
       img.hidden = true;
+      setTimeout(() => {
+        if (this.view.destroyed) return;
+        img.hidden = false;
+        img.src = `${src}${src.includes('?') ? '&' : '?'}retry=1`;
+      }, 1200);
     };
     return img;
   }

@@ -1,6 +1,6 @@
 {
   "name": "gamify-for-siyuan",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Your Habitica companion, alongside your SiYuan notes.",
   "type": "module",
   "repository": "https://github.com/mnyon/gamifyforsiyuan",

@@ -72,7 +72,7 @@ export class SkillPanel {
         host.node(
           'span',
           'empty-copy',
-          host.content ? '等级 11 后解锁职业技能' : '打开面板后加载职业技能',
+          host.content ? '等级 11 后解锁职业技能' : '正在读取职业技能…',
         ),
       );
       return;
