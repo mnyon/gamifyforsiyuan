@@ -12,7 +12,7 @@ import type {
   CompanionUser,
   InventoryItem,
 } from '../../src/features/companion/domain/types.js';
-import PREVIEW_CSS from '../../src/presentation/styles.css';
+import { PLUGIN_CSS as PREVIEW_CSS } from '../../src/presentation/css.js';
 
 const STUDIO_CSS = `
 .stage-card{width:342px;max-width:100%;margin:auto;background:var(--panel);border:1px solid #ffffff1b;border-radius:20px;overflow:hidden;box-shadow:0 24px 80px #0005,0 4px 18px #0003}

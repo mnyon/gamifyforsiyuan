@@ -132,6 +132,8 @@ export class GamifyView {
     this.isSettings = show;
     required(this.root, '.settings').hidden = !show;
     required(this.root, '.dashboard').hidden = show;
+    // .mobile is the platform projection (see plugin/platform.ts); skip
+    // autofocus on mobile so the keyboard does not pop uninvited.
     if (show && !this.host.classList.contains('mobile')) required(this.root, 'input').focus();
   }
   open(opener?: HTMLElement) {

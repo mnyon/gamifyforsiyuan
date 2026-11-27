@@ -4,7 +4,7 @@
 import { required } from '../../src/presentation/elements.js';
 import { avatarLayers } from '../../src/features/companion/application/projections.js';
 import type { CompanionUser } from '../../src/features/companion/domain/types.js';
-import PREVIEW_CSS from '../../src/presentation/styles.css';
+import { PLUGIN_CSS as PREVIEW_CSS } from '../../src/presentation/css.js';
 
 // Candidate feature under review. --idle-amp is unitless so keyframes derive
 // the pixel offset, the squash and the sway degrees from one slider.

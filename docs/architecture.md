@@ -23,11 +23,12 @@ src/
   adapters/
     habitica/         # HTTP 客户端、缓存、限流、所用响应字段校验
     siyuan/           # JSON 文件传输、TODO/更新时间查询、外部时间统计读取
-  presentation/       # GamifyView 壳层、CaretLight 编辑光、RewardEffects 奖励反馈、SceneFeedback 场景反馈、avatar 图层构建、DOM 访问与图标
+  presentation/       # GamifyView 壳层、CaretLight 编辑光、RewardEffects 奖励反馈、SceneFeedback 场景反馈、avatar 图层构建、DOM 访问与图标；styles.css + mobile.css 由 css.ts 装配
   plugin/
     main.ts           # 思源组合根、生命周期、主写窗口、操作互斥
+    platform.ts       # 平台知识唯一登记处：前端检测、能力探测、WebView 怪癖
     siyuan.d.ts       # 仅声明实际使用的宿主接口
-    styles.ts         # 样式资源入口
+    styles.ts         # 样式资源入口（再导出 presentation/css.ts 的装配结果）
 dev/                  # 按 Feature 组织的模拟插件、Note World、历史预览与模板
 tools/                # 构建、开发服务、浏览器验证、示意图生成
 tests/                # 单元、集成、架构测试与虚构数据
@@ -42,6 +43,7 @@ dist/                 # 生成的安装包、离线预览与调试文件（不�
 - Presentation 负责 DOM、三维场景和界面生命周期，调用领域规则与展示投影。
 - plugin/main.ts 是组合根，负责结算、购买、核对、刷新之间的互斥和宿主事件；独立用例不应被任意并发调用。
 - 只在需要身份和生命周期时使用实体；不为纯函数额外引入基类、事件总线或仓储。
+- 平台差异集中登记在 plugin/platform.ts（按能力探测，不做 UA 嗅探）；展示层读取组合根施加的 .mobile 投影，不反向依赖 plugin。移动视觉独立于 presentation/mobile.css。
 
 tests/architecture.test.ts 检查实际构建依赖图与源码导入，包括类型导入。正式插件不能导入 dev、tools 或 tests；领域与应用层不能通过适配器绕过分层。
 

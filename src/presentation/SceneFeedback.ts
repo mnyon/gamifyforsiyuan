@@ -28,6 +28,7 @@ export class SceneFeedback {
     this.halo = required(this.scene, '.moon-halo');
     // Pointer parallax: eased toward the pointer, springs back on leave.
     // Fine pointers only — touch scrolling must not wiggle the scene.
+    // Capability probes follow the plugin/platform.ts convention.
     this.onParMove = (event) => {
       if (
         this.host.destroyed ||

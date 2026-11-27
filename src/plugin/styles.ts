@@ -1,2 +1,1 @@
-import css from '../presentation/styles.css';
-export const PLUGIN_CSS = css;
+export { PLUGIN_CSS } from '../presentation/css.js';

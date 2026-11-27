@@ -16,7 +16,7 @@ import { required, errorMessage } from '../presentation/elements.js';
 import { parseProgress } from '../features/progress/adapters/progressSchema.js';
 import { queryRows, taskRows, updatedRows } from '../adapters/siyuan/queryRows.js';
 import { actionResult } from '../adapters/habitica/schema.js';
-import { Plugin, getFrontend, toggleRightDock } from 'siyuan';
+import { Plugin, toggleRightDock } from 'siyuan';
 import { executeAction } from '../features/companion/application/executeAction.ts';
 import { acknowledgeAction } from '../features/companion/application/acknowledgeAction.ts';
 import { companionAction } from '../features/companion/domain/types.ts';
@@ -34,6 +34,7 @@ import { reconcileRewards } from '../features/progress/application/reconcileRewa
 import { HabiticaRewardGateway } from '../features/progress/adapters/HabiticaRewardGateway.ts';
 import { GamifyView } from '../presentation/GamifyView.ts';
 import { PLUGIN_CSS } from './styles.ts';
+import { isMobileFrontend, supportsWebLocks, applyMobileTaskQuirk } from './platform.ts';
 import { HABITICA_ICON } from '../presentation/icon.ts';
 import {
   TodoProgress,
@@ -119,7 +120,7 @@ export default class GamifyForSiYuan extends Plugin {
     this.localCredentials = new LocalCredentialsRepository(this.storeKey);
     this.credentials = this.localCredentials.read();
     this.testMode = TEST_BUILD;
-    this.isMobile = ['mobile', 'browser-mobile'].includes(getFrontend());
+    this.isMobile = isMobileFrontend();
     this.view = this.createView({
       css: PLUGIN_CSS,
       onConnect: (value) => this.connect(value),
@@ -140,14 +141,7 @@ export default class GamifyForSiYuan extends Plugin {
     required(this.view.root, '.dashboard').append(reconcile);
     this.reconcileButton = reconcile;
     this.view.host.classList.toggle('mobile', this.isMobile);
-    if (this.isMobile) {
-      // SiYuan may leave its presentation class behind after unchecking on a
-      // mobile WebView. Follow the explicit blank marker without editing notes.
-      this.mobileTaskStyle = document.createElement('style');
-      this.mobileTaskStyle.textContent =
-        '.protyle-wysiwyg .li[data-type="NodeListItem"][data-subtype="t"][data-task=" "].protyle-task--done > div[data-node-id].p { color: inherit; text-decoration: none; }';
-      document.head.append(this.mobileTaskStyle);
-    }
+    if (this.isMobile) this.mobileTaskStyle = applyMobileTaskQuirk();
     this.message = '';
     this.status = 'offline';
     this.addIcons(
@@ -156,8 +150,7 @@ export default class GamifyForSiYuan extends Plugin {
         '</symbol>',
       ),
     );
-    const frontend = getFrontend();
-    if (!['mobile', 'browser-mobile'].includes(frontend)) {
+    if (!this.isMobile) {
       this.dockClick = (event) => {
         const entry = (event.target instanceof Element ? event.target : null)?.closest<HTMLElement>(
           '.dock__item',
@@ -203,7 +196,7 @@ export default class GamifyForSiYuan extends Plugin {
     };
     // One writer per local workspace/browser profile. Other windows only display.
     this.lockAbort = new AbortController();
-    if (navigator.locks) {
+    if (supportsWebLocks()) {
       navigator.locks
         .request(this.storeKey + ':writer', { signal: this.lockAbort.signal }, async () => {
           if (this.disposed) return;

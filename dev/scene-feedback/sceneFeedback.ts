@@ -7,7 +7,7 @@ import { required } from '../../src/presentation/elements.js';
 import { GamifyView } from '../../src/presentation/GamifyView.js';
 import { newProgress } from '../../src/features/progress/domain/TodoProgress.js';
 import type { CompanionUser } from '../../src/features/companion/domain/types.js';
-import PREVIEW_CSS from '../../src/presentation/styles.css';
+import { PLUGIN_CSS as PREVIEW_CSS } from '../../src/presentation/css.js';
 
 const SCENE_CSS = `
 .card{position:relative;right:auto;bottom:auto;width:342px;max-width:100%;max-height:none;margin:0 auto;animation:none}

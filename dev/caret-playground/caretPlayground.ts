@@ -1,7 +1,7 @@
 import { required } from '../../src/presentation/elements.js';
 import type { CaretFollower, Point } from '../../src/presentation/types.js';
 import { GamifyView } from '../../src/presentation/GamifyView.js';
-import PREVIEW_CSS from '../../src/presentation/styles.css';
+import { PLUGIN_CSS as PREVIEW_CSS } from '../../src/presentation/css.js';
 
 const editor = required(document, '.protyle-wysiwyg'),
   writing = required(document, '#writing');
