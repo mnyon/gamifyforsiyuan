@@ -168,6 +168,7 @@ try {
         reward: { x: view.caretFollower!.origin.x, y: view.caretFollower!.origin.y },
         sameContent: before === block.innerHTML,
         sameOffset: offset === selection.anchorOffset,
+        cheer: view.root.querySelector('.avatar')!.classList.contains('cheer'),
         coins: !!view.root.querySelector<HTMLElement>('.coin-flight')!,
         toastVisible: !view.root.querySelector<HTMLElement>('.toast')!.hidden,
         amount: view.root.querySelector<HTMLElement>('.loot-number')!?.textContent,
@@ -177,6 +178,9 @@ try {
       };
     });
     assert.deepEqual(caretResult.point, caretResult.expected);
+    // This suite runs with the card closed; the cheer must stay quiet then.
+    // The card-open cheer path is covered by verify-adventure.
+    assert.equal(caretResult.cheer, false, 'no avatar cheer while the card is closed');
     assert.deepEqual(caretResult.maintenance, caretResult.expected);
     assert.deepEqual(caretResult.reward, caretResult.expected);
     assert.equal(

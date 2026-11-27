@@ -265,6 +265,35 @@ try {
       }, result);
       await shadow.locator('.opening [data-dismiss]').click();
     }
+    // Scene feedback: progress ambient, reward cheer and rare sky events.
+    await page.evaluate(() => demo.view.editingFeedback({ progress: 0.8 }));
+    assert.ok(
+      await page.evaluate(
+        () =>
+          Number(
+            demo.view.root
+              .querySelector<HTMLElement>('.scene')!
+              .style.getPropertyValue('--approach'),
+          ) > 0.7,
+      ),
+      'pedestal ambient must follow progress',
+    );
+    await page.evaluate(() => demo.view.rewardFeedback(1, {}));
+    assert.ok(
+      await page.evaluate(() =>
+        demo.view.root.querySelector('.avatar')!.classList.contains('cheer'),
+      ),
+      'reward must cheer the avatar',
+    );
+    await page.evaluate(() => demo.view.meteor());
+    assert.ok(await page.evaluate(() => !!demo.view.root.querySelector('.meteor')));
+    await page.evaluate(() => demo.view.moonBloom());
+    assert.ok(
+      await page.evaluate(() =>
+        demo.view.root.querySelector('.moon-halo')!.classList.contains('bloom'),
+      ),
+    );
+    await page.waitForTimeout(1500);
     await shadow.locator('.adventure-shop .back').click();
     const overflow = await page.evaluate(() => {
       const c = demo.view.card;

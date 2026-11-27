@@ -23,7 +23,7 @@ src/
   adapters/
     habitica/         # HTTP 客户端、缓存、限流、所用响应字段校验
     siyuan/           # JSON 文件传输、TODO/更新时间查询、外部时间统计读取
-  presentation/       # GamifyView 壳层、CaretLight 编辑光、RewardEffects 奖励反馈、avatar 图层构建、DOM 访问与图标
+  presentation/       # GamifyView 壳层、CaretLight 编辑光、RewardEffects 奖励反馈、SceneFeedback 场景反馈、avatar 图层构建、DOM 访问与图标
   plugin/
     main.ts           # 思源组合根、生命周期、主写窗口、操作互斥
     siyuan.d.ts       # 仅声明实际使用的宿主接口

@@ -26,6 +26,30 @@ footer{padding:12px;text-align:center;border-top:1px solid var(--line);font-size
 @keyframes beam-sweep{0%{background-position:0 0;opacity:0}15%{opacity:1}100%{background-position:0 100%;opacity:0}}
 @media(prefers-reduced-motion:reduce){.editing-glow{display:none}}
 
+/* Scene feedback: reward cheer, progress ambient and rare sky events.
+   Ambient bases match the original scene exactly at --approach:0. */
+.ground-glow{position:absolute;left:50%;bottom:20px;width:150px;height:42px;transform:translateX(-50%);border-radius:50%;background:radial-gradient(ellipse,rgba(195,160,250,.3),transparent 70%);filter:blur(6px);opacity:var(--approach,0);transition:opacity .9s ease;pointer-events:none}
+.scene .pedestal{background:rgba(109,100,135,calc(.29 + var(--approach,0)*.22));box-shadow:0 0 calc(28px + var(--approach,0)*30px) rgba(195,160,250,calc(.094 + var(--approach,0)*.28));transition:box-shadow .9s ease,background .9s ease}
+.scene .orbit{border-color:rgba(200,183,239,calc(.07 + var(--approach,0)*.15));transition:border-color .9s ease}
+.scene .orbit:after{border-color:rgba(200,183,239,calc(.063 + var(--approach,0)*.13));transition:border-color .9s ease}
+.avatar.cheer{animation:cheer-hop .72s cubic-bezier(.3,.7,.4,1)}
+.avatar.cheer img[src*="weapon_"]{transform-origin:70% 62%;animation:weapon-cheer .72s ease-out}
+.avatar.cheer img.pet-layer{animation:pet-cheer .72s ease-out .05s}
+@keyframes cheer-hop{0%,100%{translate:0 0}26%{translate:0 -7px}50%{translate:0 0}66%{translate:0 -2.5px}80%{translate:0 0}}
+@keyframes weapon-cheer{0%,100%{rotate:0deg}28%{rotate:-15deg}52%{rotate:-4deg}72%{rotate:-8deg}}
+@keyframes pet-cheer{0%,100%{translate:0 0}30%{translate:0 -6px}56%{translate:0 0}72%{translate:0 -2px}}
+.meteor{position:absolute;top:0;left:0;width:2.5px;height:2.5px;border-radius:50%;background:#fffdf5;box-shadow:0 0 8px 2px rgba(233,221,255,.8);rotate:158deg;opacity:0;pointer-events:none;animation:meteor-fly 1.15s cubic-bezier(.25,.6,.35,1) forwards}
+.meteor:after{content:'';position:absolute;left:-92px;top:.5px;width:92px;height:1.5px;border-radius:1px;background:linear-gradient(to right,transparent,rgba(200,183,239,.5) 55%,rgba(243,236,255,.9))}
+@keyframes meteor-fly{0%{opacity:0;translate:252px 16px}10%{opacity:1}75%{opacity:.9}100%{opacity:0;translate:36px 100px}}
+.moon-halo{position:absolute;top:-15px;right:9px;width:110px;height:110px;border-radius:50%;pointer-events:none;opacity:0;filter:blur(2.5px);background:radial-gradient(circle,rgba(238,226,196,.34) 0%,rgba(238,226,196,.15) 26%,rgba(214,203,238,.08) 52%,transparent 70%)}
+.moon-halo:after{content:'';position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,transparent 50%,rgba(240,230,208,.3) 55%,rgba(240,230,208,.1) 60%,transparent 67%);opacity:0}
+.moon-halo.bloom{animation:halo-bloom 3.8s cubic-bezier(.25,.6,.35,1) forwards}
+.moon-halo.bloom:after{animation:halo-ring 3.8s ease-out forwards}
+.moon.bloom{animation:moon-bloom 3.8s ease-out}
+@keyframes halo-bloom{0%{opacity:0;transform:scale(.5)}18%{opacity:1}45%{opacity:.95;transform:scale(1)}75%{opacity:.6}100%{opacity:0;transform:scale(1.06)}}
+@keyframes halo-ring{0%,22%{opacity:0}48%{opacity:1}78%{opacity:.5}100%{opacity:0}}
+@keyframes moon-bloom{0%,100%{box-shadow:-6px 3px 0 0 #e1d0a8}30%{box-shadow:-6px 3px 0 0 #efe0b8,0 0 14px 3px rgba(238,226,196,.5)}60%{box-shadow:-6px 3px 0 0 #e8d9ae,0 0 10px 2px rgba(238,226,196,.28)}}
+
 /* Adventure panel: reviewed standalone prototype components. */
 .shop-entry{display:flex;align-items:center;gap:9px;background:#b4e7ce09;border:1px solid #b4e7ce22;border-radius:12px;padding:10px 12px;color:var(--mint);font-size:12px}
 .shop-entry b{font-size:20px;font-weight:400}

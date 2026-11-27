@@ -14,6 +14,7 @@ export const STAR_ICON = HABITICA_ICON;
 import { editingApproach } from '../features/progress/domain/ActivityProgress.js';
 import { CaretLight } from './CaretLight.js';
 import { RewardEffects } from './RewardEffects.js';
+import { SceneFeedback } from './SceneFeedback.js';
 import { avatarSignature, buildAvatar } from './avatar.js';
 
 /**
@@ -29,6 +30,7 @@ export class GamifyView {
   adventure: AdventureView;
   caret: CaretLight;
   effects: RewardEffects;
+  scene: SceneFeedback;
   effectTimers: Set<number>;
   outside: (event: PointerEvent) => void;
   escape: (event: KeyboardEvent) => void;
@@ -48,7 +50,7 @@ export class GamifyView {
       <section class="card" aria-label="Gamify for SiYuan" hidden>
         <header><div class="brand">${STAR_ICON}<span>GAMIFY <b>for SiYuan</b></span></div><div class="tools"><button class="icon settings-toggle" aria-label="连接设置" title="连接设置">⚙</button><button class="icon close" aria-label="收起卡片">×</button></div></header>
         <div class="dashboard">
-          <div class="scene"><div class="orbit"></div><i class="star s1">✦</i><i class="star s2">✧</i><i class="star s3">·</i><i class="star s4">✦</i><div class="moon"></div><div class="hill back"></div><div class="hill front"></div><div class="pedestal"></div><div class="avatar" role="img" aria-label="Habitica 角色"><span class="placeholder">✧</span></div></div>
+          <div class="scene"><div class="orbit"></div><i class="star s1">✦</i><i class="star s2">✧</i><i class="star s3">·</i><i class="star s4">✦</i><div class="moon-halo"></div><div class="moon"></div><div class="hill back"></div><div class="hill front"></div><div class="pedestal"></div><div class="ground-glow"></div><div class="avatar" role="img" aria-label="Habitica 角色"><span class="placeholder">✧</span></div></div>
           <div class="identity"><span class="eyebrow player-caption">YOUR ADVENTURE</span><h2 class="player-name">冒险，从这里开始</h2><div class="player-meta">连接你的 Habitica 角色</div></div>
           <div class="vitals" hidden><div class="bar-label"><span><i class="heart">♥</i> 生命值</span><span class="hp-text"></span></div><div class="track hp"><span></span></div><div class="coins"><span>◈ <b class="gold">0</b> 金币</span><span class="level"></span></div></div>
           <div class="notice" role="status"></div>
@@ -57,6 +59,7 @@ export class GamifyView {
       </section><div class="toast" role="status" hidden>${STAR_ICON}<span></span></div><div class="particles" aria-hidden="true"></div><div class="line-effects" aria-hidden="true"></div><div class="announcer" role="status"></div>`;
     this.caret = new CaretLight(this);
     this.effects = new RewardEffects(this);
+    this.scene = new SceneFeedback(this);
     this.effectTimers = new Set();
     required(this.root, '.settings > p').textContent = '连接你的 Habitica 角色。';
     document.body.append(this.host);
@@ -144,6 +147,7 @@ export class GamifyView {
   }
   update({ state, user, message = '', testMode = false, adventure = {} }: ViewSnapshot) {
     this.caret.approach = editingApproach(state);
+    this.scene.approach(this.caret.approach);
     this.testMode = testMode;
     if (testMode)
       user = {
@@ -260,9 +264,12 @@ export class GamifyView {
   }
   maintainBlock(context: FeedbackContext = {}) {
     this.caret.maintainBlock(context);
+    this.scene.activity();
   }
   editingFeedback(context: FeedbackContext & { progress?: number } = {}) {
     this.caret.editingFeedback(context);
+    this.scene.activity();
+    this.scene.approach(this.caret.approach);
   }
   caretPoint(context: FeedbackContext = {}): Point | null {
     return this.caret.point(context);
@@ -278,6 +285,13 @@ export class GamifyView {
   }
   rewardFeedback(gold: number | null | undefined, context: FeedbackContext = {}) {
     this.effects.rewardFeedback(gold, context);
+    this.scene.cheer();
+  }
+  meteor() {
+    this.scene.meteor();
+  }
+  moonBloom() {
+    this.scene.moonBloom();
   }
   sparkles(point: Point, count = 9, gold = false) {
     this.effects.sparkles(point, count, gold);
