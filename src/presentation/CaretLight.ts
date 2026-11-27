@@ -115,7 +115,7 @@ export class CaretLight {
     this.caretGeometry = { height: Math.max(12, Math.min(40, rect.height)) };
     return { x, y };
   }
-  feedback(point: Point, gold = false, weight = 0) {
+  feedback(point: Point, gold = false, weight = 0, purpleAfterglow = false) {
     if (this.host.destroyed) return;
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduced) {
@@ -123,11 +123,16 @@ export class CaretLight {
       return;
     }
     const follower = this.follow(point, gold);
-    if (!gold) follower.maintenanceUntil = performance.now() + 1300;
+    if (gold && purpleAfterglow) {
+      // Old-document rewards keep the ceremony but tint the afterglow purple
+      // through the existing maintenance term instead of the gold one.
+      follower.goldUntil = 0;
+      follower.maintenanceUntil = performance.now() + 1800;
+    } else if (!gold) follower.maintenanceUntil = performance.now() + 1300;
     // Bound simultaneous sweeps when an offline queue delivers several rewards.
     if (follower.element.querySelectorAll('.beam-sweep').length >= 2) return;
     const light = document.createElement('i');
-    light.className = 'beam-sweep' + (gold ? '' : ' purple');
+    light.className = 'beam-sweep' + (gold && !purpleAfterglow ? '' : ' purple');
     follower.element.append(light);
     this.host.later(() => light.remove(), 900);
   }

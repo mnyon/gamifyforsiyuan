@@ -15,6 +15,8 @@ export interface FeedbackContext {
   point?: Point;
   weight?: number;
   caret?: boolean;
+  /** Maintenance (old-document) rewards tint the caret afterglow purple. */
+  maintenance?: boolean;
 }
 export interface EffectEntry extends FeedbackContext {
   effect: HTMLDivElement;

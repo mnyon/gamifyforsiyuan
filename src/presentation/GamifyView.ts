@@ -50,7 +50,7 @@ export class GamifyView {
       <section class="card" aria-label="Gamify for SiYuan" hidden>
         <header><div class="brand">${STAR_ICON}<span>GAMIFY <b>for SiYuan</b></span></div><div class="tools"><button class="icon settings-toggle" aria-label="连接设置" title="连接设置">⚙</button><button class="icon close" aria-label="收起卡片">×</button></div></header>
         <div class="dashboard">
-          <div class="scene"><div class="orbit"></div><i class="star s1">✦</i><i class="star s2">✧</i><i class="star s3">·</i><i class="star s4">✦</i><div class="moon-halo"></div><div class="moon"></div><div class="hill back"></div><div class="hill front"></div><div class="pedestal"></div><div class="ground-glow"></div><div class="avatar" role="img" aria-label="Habitica 角色"><span class="placeholder">✧</span></div></div>
+          <div class="scene"><div class="orbit"></div><i class="star s1">✦</i><i class="star s2">✧</i><i class="star s3">·</i><i class="star s4">✦</i><div class="moon-halo"></div><div class="moon"></div><div class="hill back"></div><div class="hill front"></div><div class="pedestal"></div><i class="mote-ambient m1"></i><i class="mote-ambient m2"></i><i class="mote-ambient m3"></i><i class="mote-ambient m4"></i><div class="ground-glow"></div><div class="avatar" role="img" aria-label="Habitica 角色"><span class="placeholder">✧</span></div></div>
           <div class="identity"><span class="eyebrow player-caption">YOUR ADVENTURE</span><h2 class="player-name">冒险，从这里开始</h2><div class="player-meta">连接你的 Habitica 角色</div></div>
           <div class="vitals" hidden><div class="bar-label"><span><i class="heart">♥</i> 生命值</span><span class="hp-text"></span></div><div class="track hp"><span></span></div><div class="coins"><span>◈ <b class="gold">0</b> 金币</span><span class="level"></span></div></div>
           <div class="notice" role="status"></div>
@@ -59,11 +59,11 @@ export class GamifyView {
       </section><div class="toast" role="status" hidden>${STAR_ICON}<span></span></div><div class="particles" aria-hidden="true"></div><div class="line-effects" aria-hidden="true"></div><div class="announcer" role="status"></div>`;
     this.caret = new CaretLight(this);
     this.effects = new RewardEffects(this);
-    this.scene = new SceneFeedback(this);
     this.effectTimers = new Set();
     required(this.root, '.settings > p').textContent = '连接你的 Habitica 角色。';
     document.body.append(this.host);
     this.card = required(this.root, '.card');
+    this.scene = new SceneFeedback(this);
     required(this.root, '.close').onclick = () => this.close();
     required(this.root, '.settings-toggle').onclick = () => this.settings(!this.isSettings);
     const form = required(this.root, 'form');
@@ -274,8 +274,8 @@ export class GamifyView {
   caretPoint(context: FeedbackContext = {}): Point | null {
     return this.caret.point(context);
   }
-  caretFeedback(point: Point, gold = false, weight = 0) {
-    this.caret.feedback(point, gold, weight);
+  caretFeedback(point: Point, gold = false, weight = 0, purpleAfterglow = false) {
+    this.caret.feedback(point, gold, weight, purpleAfterglow);
   }
   followEditingPoint(point: Point, gold: boolean): CaretFollower {
     return this.caret.follow(point, gold);
@@ -302,6 +302,7 @@ export class GamifyView {
   destroy() {
     this.adventure?.destroy();
     this.destroyed = true;
+    this.scene.destroy();
     this.caret.stop();
     this.caret.nativeCaretStyle?.remove();
     this.effects.destroy();

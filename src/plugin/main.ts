@@ -564,6 +564,7 @@ export default class GamifyForSiYuan extends Plugin {
         this.view.rewardFeedback(1, {
           blockId: reward.sources?.at(-1),
           caret: ['editing', 'maintenance'].includes(reward.kind || ''),
+          maintenance: reward.kind === 'maintenance',
         });
       }
       await this.persist();
@@ -601,6 +602,7 @@ export default class GamifyForSiYuan extends Plugin {
           this.view.rewardFeedback(reward.gold, {
             blockId: reward.sources?.at(-1),
             caret: ['editing', 'maintenance'].includes(reward.kind || ''),
+            maintenance: reward.kind === 'maintenance',
           });
         },
       });

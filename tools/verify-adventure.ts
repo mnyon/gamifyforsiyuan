@@ -294,6 +294,30 @@ try {
       ),
     );
     await page.waitForTimeout(1500);
+    // Idle avatar: breathing wrapper, gear follow-through, glints and motes.
+    assert.ok(
+      await page.evaluate(() => {
+        const body = demo.view.root.querySelector('.avatar-body');
+        return !!body && getComputedStyle(body).animationName.includes('avatar-idle');
+      }),
+      'avatar must breathe',
+    );
+    assert.ok(await page.evaluate(() => !!demo.view.root.querySelector('.avatar-fidget')));
+    assert.ok(
+      await page.evaluate(() => demo.view.root.querySelectorAll('.glint').length >= 2),
+      'weapon and shield must carry masked glints',
+    );
+    assert.equal(
+      await page.evaluate(() => demo.view.root.querySelectorAll('.mote-ambient').length),
+      4,
+    );
+    assert.ok(
+      await page.evaluate(() => {
+        const weapon = demo.view.root.querySelector('.avatar img.layer-weapon');
+        return !!weapon && getComputedStyle(weapon).animationName === 'weapon-sway';
+      }),
+      'weapon must sway with a lagged phase',
+    );
     await shadow.locator('.adventure-shop .back').click();
     const overflow = await page.evaluate(() => {
       const c = demo.view.card;

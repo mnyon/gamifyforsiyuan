@@ -317,6 +317,19 @@ try {
       () => !view.caretFollower && !view.root.querySelector<HTMLElement>('.editing-glow')!,
     );
     assert.equal(await page.evaluate(() => view.nativeCaretStyle!.sheet!.disabled), true);
+    // Maintenance rewards tint the caret afterglow purple instead of gold.
+    const tint = await page.evaluate(() => {
+      view.rewardFeedback(1, { blockId: '20261101000000-aaaaaaa', caret: true, maintenance: true });
+      const f = view.caretFollower!;
+      return {
+        goldUntil: f.goldUntil,
+        maintenanceUntil: f.maintenanceUntil || 0,
+        now: performance.now(),
+      };
+    });
+    assert.equal(tint.goldUntil, 0, 'maintenance afterglow must suppress the gold term');
+    assert.ok(tint.maintenanceUntil > tint.now, 'maintenance afterglow uses the purple term');
+    await page.evaluate(() => view.stopCaretFollower());
     await page.evaluate(() => {
       view.maintainBlock({ blockId: '20261101000000-aaaaaaa' });
       window.followerBeforeDestroy = view.caretFollower!;

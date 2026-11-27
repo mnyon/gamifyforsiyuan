@@ -50,6 +50,51 @@ footer{padding:12px;text-align:center;border-top:1px solid var(--line);font-size
 @keyframes halo-ring{0%,22%{opacity:0}48%{opacity:1}78%{opacity:.5}100%{opacity:0}}
 @keyframes moon-bloom{0%,100%{box-shadow:-6px 3px 0 0 #e1d0a8}30%{box-shadow:-6px 3px 0 0 #efe0b8,0 0 14px 3px rgba(238,226,196,.5)}60%{box-shadow:-6px 3px 0 0 #e8d9ae,0 0 10px 2px rgba(238,226,196,.28)}}
 
+/* Idle avatar: breathing bob on the rider wrapper, lagged follow-through on
+   gear, masked glints, counter-phase contact shadow, ambient sky and pointer
+   parallax. Sleeping avatars stay still except the drifting zzz. */
+.avatar-body{position:absolute;inset:0;transform-origin:bottom center;animation:avatar-idle var(--idle-period,3.2s) ease-in-out infinite,aura-breathe 6.4s ease-in-out infinite}
+.avatar-fidget{position:absolute;inset:0;transform-origin:bottom center;animation:fidget 14s ease-in-out infinite}
+.avatar img.pet-layer{animation:pet-idle calc(var(--idle-period,3.2s)*.84) ease-in-out calc(var(--idle-period,3.2s)*-.44) infinite}
+.avatar img.layer-weapon{transform-origin:70% 62%;animation:weapon-sway var(--idle-period,3.2s) ease-in-out calc(var(--idle-period,3.2s)*.14) infinite}
+.avatar img.layer-shield{transform-origin:30% 62%;animation:shield-sway var(--idle-period,3.2s) ease-in-out calc(var(--idle-period,3.2s)*.2) infinite}
+.avatar img.layer-head{transform-origin:50% 22%;animation:head-follow var(--idle-period,3.2s) ease-in-out calc(var(--idle-period,3.2s)*.1) infinite}
+.avatar img.layer-back{transform-origin:50% 30%;animation:cape-sway var(--idle-period,3.2s) ease-in-out calc(var(--idle-period,3.2s)*.18) infinite}
+.glint{position:absolute;top:0;left:0;width:90px;height:90px;pointer-events:none;background:linear-gradient(115deg,transparent 42%,#ffffff59 47%,#ffffffb3 50%,#ffffff59 53%,transparent 58%);background-size:260% 100%;background-position:130% 0;background-repeat:no-repeat;-webkit-mask-image:var(--glint-mask);mask-image:var(--glint-mask);-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;animation:glint-sweep 8.5s ease-in-out infinite}
+.glint-shield{animation-delay:-4.2s}
+.avatar.has-mount .glint{left:24px}
+.avatar.has-mount .glint.kangaroo{top:24px}
+.pedestal{animation:pedestal-breathe var(--idle-period,3.2s) ease-in-out infinite}
+.scene:has(.avatar.is-sleeping) .pedestal{animation:none}
+.star{animation:twinkle 4.2s ease-in-out infinite}
+.s2{animation-delay:-1.4s}.s3{animation-delay:-2.6s}.s4{animation-delay:-3.4s}
+.orbit:after{animation:orbit-spin 90s linear infinite}
+.mote-ambient{position:absolute;bottom:44px;width:3px;height:3px;border-radius:50%;background:#d5c1ff;box-shadow:0 0 6px #c5acf9;opacity:0;pointer-events:none}
+.m1{left:32%;animation:mote-rise 11s linear infinite}
+.m2{left:58%;animation:mote-rise 13s linear -4s infinite}
+.m3{left:72%;animation:mote-rise 9.5s linear -7s infinite}
+.m4{left:44%;animation:mote-rise 14s linear -2s infinite}
+.hill{translate:calc(var(--par-x,0)*3px) calc(var(--par-y,0)*1.5px)}
+.orbit{translate:calc(var(--par-x,0)*1.5px) calc(var(--par-y,0)*1px)}
+.moon{translate:calc(var(--par-x,0)*1px) calc(var(--par-y,0)*.6px)}
+.avatar{translate:calc(var(--par-x,0)*-2px) calc(var(--par-y,0)*-1px)}
+.avatar.is-sleeping img.layer-zzz{animation:zzz-drift 3.8s ease-in-out infinite}
+.avatar.is-sleeping .avatar-body,.avatar.is-sleeping img,.avatar.is-sleeping .glint{animation:none}
+@keyframes avatar-idle{0%,100%{transform:translateY(0) scaleY(calc(1 - var(--idle-amp,1.5)/300))}50%{transform:translateY(calc(var(--idle-amp,1.5)*-1px)) scaleY(calc(1 + var(--idle-amp,1.5)/150))}}
+@keyframes aura-breathe{0%,100%{filter:drop-shadow(0 0 2px #c5acf91f)}50%{filter:drop-shadow(0 0 8px #c5acf966)}}
+@keyframes fidget{0%,84%,96%,100%{transform:none}87%{transform:rotate(-1.8deg) translateY(-1px)}90%{transform:rotate(1.1deg)}93%{transform:rotate(-.4deg)}}
+@keyframes pet-idle{0%,100%{transform:translateY(0)}50%{transform:translateY(calc(var(--idle-amp,1.5)*-1.33px))}}
+@keyframes weapon-sway{0%,100%{transform:rotate(0) translateY(0)}50%{transform:rotate(calc(var(--idle-amp,1.5)*.8deg)) translateY(calc(var(--idle-amp,1.5)*-.4px))}}
+@keyframes shield-sway{0%,100%{transform:rotate(0) translateY(0)}50%{transform:rotate(calc(var(--idle-amp,1.5)*-.5deg)) translateY(calc(var(--idle-amp,1.5)*-.3px))}}
+@keyframes head-follow{0%,100%{transform:rotate(0) translateY(0)}50%{transform:rotate(calc(var(--idle-amp,1.5)*.3deg)) translateY(calc(var(--idle-amp,1.5)*-.25px))}}
+@keyframes cape-sway{0%,100%{transform:rotate(0)}50%{transform:rotate(calc(var(--idle-amp,1.5)*.6deg))}}
+@keyframes glint-sweep{0%,58%{background-position:130% 0}72%,100%{background-position:-30% 0}}
+@keyframes pedestal-breathe{0%,100%{transform:translateX(-50%) scaleX(1);opacity:1}50%{transform:translateX(-50%) scaleX(.88);opacity:.7}}
+@keyframes twinkle{0%,100%{opacity:.35}50%{opacity:.85}}
+@keyframes orbit-spin{to{transform:rotate(360deg)}}
+@keyframes mote-rise{0%{opacity:0;transform:translate(0,0)}12%{opacity:.5}55%{opacity:.35;transform:translate(6px,-46px)}100%{opacity:0;transform:translate(-3px,-84px)}}
+@keyframes zzz-drift{0%,100%{transform:translateY(0);opacity:.75}50%{transform:translateY(-4px);opacity:1}}
+
 /* Adventure panel: reviewed standalone prototype components. */
 .shop-entry{display:flex;align-items:center;gap:9px;background:#b4e7ce09;border:1px solid #b4e7ce22;border-radius:12px;padding:10px 12px;color:var(--mint);font-size:12px}
 .shop-entry b{font-size:20px;font-weight:400}

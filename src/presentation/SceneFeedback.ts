@@ -16,9 +16,55 @@ export class SceneFeedback {
   private lastActivityAt = 0;
   private armedTimer?: number;
   private cooldownUntil = 0;
+  private parFrame = 0;
+  private px = 0;
+  private py = 0;
+  private tx = 0;
+  private ty = 0;
+  private readonly onParMove: (event: PointerEvent) => void;
+  private readonly onParLeave: () => void;
   constructor(private readonly host: GamifyView) {
     this.scene = required(host.root, '.scene');
     this.halo = required(this.scene, '.moon-halo');
+    // Pointer parallax: eased toward the pointer, springs back on leave.
+    // Fine pointers only — touch scrolling must not wiggle the scene.
+    this.onParMove = (event) => {
+      if (
+        this.host.destroyed ||
+        !matchMedia('(pointer: fine)').matches ||
+        matchMedia('(prefers-reduced-motion: reduce)').matches
+      )
+        return;
+      const rect = this.host.card.getBoundingClientRect();
+      this.tx = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
+      this.ty = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
+      this.kick();
+    };
+    this.onParLeave = () => {
+      this.tx = 0;
+      this.ty = 0;
+      this.kick();
+    };
+    this.host.card.addEventListener('pointermove', this.onParMove);
+    this.host.card.addEventListener('pointerleave', this.onParLeave);
+  }
+  private kick() {
+    if (!this.parFrame) this.parFrame = requestAnimationFrame(this.parLoop);
+  }
+  private parLoop = () => {
+    this.px += (this.tx - this.px) * 0.08;
+    this.py += (this.ty - this.py) * 0.08;
+    this.scene.style.setProperty('--par-x', this.px.toFixed(3));
+    this.scene.style.setProperty('--par-y', this.py.toFixed(3));
+    this.parFrame =
+      Math.abs(this.tx - this.px) > 0.002 || Math.abs(this.ty - this.py) > 0.002
+        ? requestAnimationFrame(this.parLoop)
+        : 0;
+  };
+  destroy() {
+    this.host.card.removeEventListener('pointermove', this.onParMove);
+    this.host.card.removeEventListener('pointerleave', this.onParLeave);
+    cancelAnimationFrame(this.parFrame);
   }
   approach(value: number) {
     const v = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));

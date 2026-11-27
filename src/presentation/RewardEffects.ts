@@ -111,7 +111,7 @@ export class RewardEffects {
     // also keeps its brief gold sweep; approaching a reward never calls here.
     if (caret) {
       required(host.root, '.announcer').textContent = message;
-      host.caretFeedback(caret, true);
+      host.caretFeedback(caret, true, 0, !!context.maintenance);
     }
     this.feedback(message, true, undefined, false);
     required(host.root, '.toast').classList.add('coin-toast');
