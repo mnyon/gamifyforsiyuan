@@ -15,7 +15,7 @@ src/
     domain/           # 购买与施法资格、角色与目录类型
     application/      # 操作用例、人工核对、展示投影与接口
     adapters/         # Habitica 网关、本机操作记录
-    presentation/     # AdventureView：商店、背包、技能与宝箱交互
+    presentation/     # AdventureView 壳层（导航、共享快照、对话框）+ SkillPanel/ShopPanel/BagPanel/ChestOverlay
   features/connection/
     domain/           # 凭据类型与格式规则
     application/      # 本机与共享连接的恢复、保存、同步选择
@@ -23,7 +23,7 @@ src/
   adapters/
     habitica/         # HTTP 客户端、缓存、限流、所用响应字段校验
     siyuan/           # JSON 文件传输、TODO/更新时间查询、外部时间统计读取
-  presentation/       # GamifyView、DOM 元素访问、动画状态、图标
+  presentation/       # GamifyView 壳层、CaretLight 编辑光、RewardEffects 奖励反馈、avatar 图层构建、DOM 访问与图标
   plugin/
     main.ts           # 思源组合根、生命周期、主写窗口、操作互斥
     siyuan.d.ts       # 仅声明实际使用的宿主接口

@@ -10,7 +10,10 @@ const require = createRequire(
     : import.meta.url,
 );
 const { chromium } = require('playwright-core') as typeof import('playwright-core');
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await chromium.launch({
+  channel: process.env.GAMIFY_BROWSER_CHANNEL || 'chrome',
+  headless: true,
+});
 try {
   for (const name of ['caret-playground', 'page-terrain']) {
     const page = await browser.newPage();
